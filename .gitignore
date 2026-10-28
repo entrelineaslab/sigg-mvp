@@ -1,0 +1,11 @@
+node_modules/
+server/db/*.sqlite
+server/db/*.sqlite-shm
+server/db/*.sqlite-wal
+server/db/*.bak
+server/.env
+client/.env
+client/dist/
+EntreLineas-MVP.zip
+EntreLineas-BaseInicial.sqlite
+.DS_Store
