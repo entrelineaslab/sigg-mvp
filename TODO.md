@@ -37,3 +37,4 @@
 - [ ] **Validación en el restaurante:** comprobar lectura del KDS a 1,5 m; realizar medida de RTT bajo carga y prueba de microcortes/reconexión en la WLAN y las tablets destino.
 - [ ] **Decisión del equipo pendiente:** aprobar o modificar las ventanas de conflicto entre reservas y pre-bloqueo de mesas. El código conserva los valores vigentes, no los presenta como definitivos.
 - [ ] **Horario oficial de turnos:** el filtro infiere `Noche` desde las 18:00 y `Mediodía` antes cuando no se elige manualmente; confirmar los horarios oficiales del local y parametrizar el corte.
+- [x] **Refinamiento visual Figma:** centrar y compactar acceso; usar azul marino con filete naranja; aumentar jerarquía y zonas táctiles de Salón/Comanda/Reservas/Caja; mostrar el KDS en superficie oscura con estaciones diferenciadas, conservando colores semánticos y adaptación responsive. Revisado en vista previa: login a 390 px, salón a 390 px y escritorio, comanda y KDS en escritorio.

@@ -1,1 +1,25 @@
-{"name":"entre-lineas-server","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node src/index.js","dev":"node --watch src/index.js","db:init":"node src/init-db.js","test":"node --test test/*.test.js"},"dependencies":{"bcryptjs":"^2.4.3","better-sqlite3":"^11.8.1","cors":"^2.8.5","dotenv":"^16.4.7","entre-lineas":"file:..","express":"^4.21.2","jsonwebtoken":"^9.0.2","socket.io":"^4.8.1"},"devDependencies":{"socket.io-client":"^4.8.4"}}
+{
+  "name": "entre-lineas-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "db:init": "node src/init-db.js",
+    "user:set-pin": "node src/set-pin.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  }
+}

@@ -39,6 +39,14 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 - **Caja:** revisa cuentas, puede anular platos pendientes o en preparación con confirmación y auditoría, selecciona un método y registra un cobro.
 - **Administrador:** el perfil se mantiene, con rótulo “En desarrollo” y sin rutas, endpoints ni eventos operativos.
 
+### Antes de un piloto controlado
+
+1. Abre `server/.env`; reemplaza `JWT_SECRET` por una clave larga aleatoria. Puedes generar texto seguro desde la raíz con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64'))"`. Copia el resultado al archivo, pero no lo envíes por chat ni lo subas a Git.
+2. Para cambiar el PIN del Mozo ejecuta `npm run user:set-pin --prefix server -- mozo`. Escribe el PIN nuevo dos veces en la terminal; no se muestra mientras lo tecleas. El utilitario hace backup, guarda un hash, limpia bloqueos y audita el cambio. Repite con `jefe`, `cocina`, `caja` y/o `admin` según corresponda.
+3. Reinicia la API si rotaste `JWT_SECRET`; esto invalida los tokens activos.
+
+**Importante:** actualmente existe una cuenta compartida por rol, no una cuenta individual por empleado. El PIN de 4 dígitos no acredita qué persona realizó cada acción; para atribución individual hace falta una etapa de gestión de usuarios y credenciales personales.
+
 ## 4. Salón y comanda
 
 1. El Mozo toca una mesa libre. La mesa se abre directamente con dos comensales por defecto; puede ajustar el número dentro del aforo desde la pantalla de comanda.

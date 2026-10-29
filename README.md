@@ -50,6 +50,14 @@ Perfiles: `mozo`, `jefe`, `cocina`, `caja` y `admin`; PIN inicial de demo `1234`
 - **Caja:** revisión de cuentas, anulación auditada de ítems todavía no elaborados y cobro.
 - **Administrador:** visible como “En desarrollo”; sin módulos, endpoints operativos ni sala de eventos.
 
+### Preparación de credenciales antes de un piloto controlado
+
+En `server/.env`, reemplaza `JWT_SECRET` por una cadena aleatoria larga. Puedes generar una con `node -e "console.log(require('node:crypto').randomBytes(48).toString('base64'))"`; copia el resultado **solo** a ese archivo, no al chat ni al repositorio. Reinicia la API después de cambiarlo; al rotarlo, los tokens de sesión existentes dejan de servir.
+
+Para cambiar el PIN de un perfil, desde la raíz ejecuta, por ejemplo, `npm run user:set-pin --prefix server -- mozo`. La terminal pedirá dos veces un PIN nuevo de 4 dígitos sin mostrarlo, guardará solo su hash, limpiará bloqueos y creará una copia de seguridad de la base. Repite el comando usando `jefe`, `cocina`, `caja` o `admin`. No introduzcas PIN por SQL ni modifiques manualmente `Usuario.credencial`.
+
+**Límite importante:** esta versión tiene una cuenta compartida por rol (por ejemplo, `mozo`), no cuentas personales para cada empleado; cambiar el PIN del rol no da atribución individual. Es adecuada para un piloto técnico controlado en LAN, no es todavía una solución endurecida para el registro individual de personal.
+
 ## Flujos disponibles
 
 - **Salón y comanda:** una pulsación en una mesa libre abre una comanda con dos comensales por defecto; el aforo se ajusta en la pantalla. Un toque en “Ver Comanda” para una mesa ocupada abre la comanda existente. Cada ítem guarda precio histórico, observaciones completas y hora individual de envío; la clave idempotente protege los reintentos.

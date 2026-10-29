@@ -21,6 +21,8 @@ npm run build --prefix client
 
 La cobertura inspecciona aforo, total monetario histórico, frontera de 40 minutos, transición secuencial, permisos de Administrador/Mozo/Jefe/Cocina/Caja, persistencia del inicializador sin sobrescribir precio/PIN/bloqueos, idempotencia, timestamp y observaciones extensas, preparación/entrega, intervención del Jefe antes/después de 25 minutos, reserva futura, filtros fecha/turno, edición/anulación, FIFO por capacidad, llegada separada, método de pago obligatorio, rechazo sin cierre, anulación en Caja, cobro, liberación de mesa y monitor no-show/auditoría. Un cliente Socket.IO autenticado además confirma que el evento de `Alerta_Permanencia` se propaga a los tablets al superar el umbral.
 
+Por separado de los 6 tests automáticos, el comando de cambio de PIN se ejecutó en una pseudo-terminal contra otra SQLite temporal: comprobé la entrada oculta, confirmación doble, hash bcrypt, reseteo del control de acceso y creación del backup. La base de demostración no fue modificada.
+
 ## Estado de la base local de desarrollo
 
 Después de migrar, el DDL presenta `Detalle_Comanda.fecha_hora_envio` y el índice `ix_Detalle_Comanda_kds_fifo`. La verificación registró 10 mesas, 5 roles, 5 usuarios demo, 4 secciones, 13 productos, cero comandas/reservas/cobros operativos y cero violaciones de claves foráneas. Se preservó una copia anterior `.pre-etapa3-<timestamp>.bak` antes de añadir el campo.
