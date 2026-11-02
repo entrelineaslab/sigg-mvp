@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS Detalle_Comanda (
   precio_unitario_historico DECIMAL(12,2) NOT NULL CHECK(precio_unitario_historico >= 0),
   observaciones TEXT NOT NULL DEFAULT '',
   fecha_hora_envio TEXT NOT NULL DEFAULT (datetime('now')),
-  estado_elaboracion TEXT NOT NULL DEFAULT 'Pendiente' CHECK(estado_elaboracion IN ('Pendiente','En_Preparacion','Entregado','Cancelado'))
+  estado_elaboracion TEXT NOT NULL DEFAULT 'En_Preparacion' CHECK(estado_elaboracion IN ('En_Preparacion','Entregado','Cancelado'))
 );
 CREATE INDEX IF NOT EXISTS ix_Detalle_Comanda_estado ON Detalle_Comanda(estado_elaboracion);
 CREATE INDEX IF NOT EXISTS ix_Detalle_Comanda_kds_fifo ON Detalle_Comanda(estado_elaboracion,fecha_hora_envio,id_detalle);
@@ -111,7 +111,11 @@ INSERT INTO Producto(id_producto,id_seccion,nombre,descripcion,precio) VALUES
   (11,4,'Gaseosa','Línea clásica',3500.00),
   (12,2,'Ensalada César','Pollo grillado y aderezo César',9800.00),
   (13,2,'Tabla de Quesos','Selección de quesos de la casa',11000.00)
-ON CONFLICT(id_producto) DO NOTHING;
+ON CONFLICT(id_producto) DO UPDATE SET
+  id_seccion=excluded.id_seccion,
+  nombre=excluded.nombre,
+  descripcion=excluded.descripcion,
+  precio=excluded.precio;
 
 -- Tablas técnicas auxiliares (no agregan campos a las entidades del DER).
 CREATE TABLE IF NOT EXISTS Control_Acceso (
