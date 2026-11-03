@@ -23,7 +23,7 @@ El esquema SQLite conserva los nombres de las nueve entidades y los atributos de
 `id_comanda` (PK), `id_mesa` (FK → `Mesa`), `id_usuario` (FK → `Usuario`), `fecha_hora` (DATETIME) y `estado` (`En_Proceso`, `Cobrada_Cerrada`). Un índice único parcial garantiza como máximo una comanda `En_Proceso` por mesa.
 
 ### Detalle_Comanda
-`id_detalle` (PK), `id_comanda` (FK → `Comanda`), `id_producto` (FK → `Producto`), `cantidad`, `precio_unitario_historico` (DECIMAL), `observaciones` y `estado_elaboracion` (`Pendiente`, `En_Preparacion`, `Entregado`, `Cancelado`). El precio queda fijado al agregar el ítem.
+`id_detalle` (PK), `id_comanda` (FK → `Comanda`), `id_producto` (FK → `Producto`), `cantidad`, `precio_unitario_historico` (DECIMAL), `observaciones` y `estado_elaboracion` (`En_Preparacion`, `Entregado`, `Cancelado`). El precio queda fijado al agregar el ítem.
 
 ### Reserva
 `id_reserva` (PK), `nombre_cliente`, `telefono`, `fecha_hora_reserva`, `turno` (`Mediodía`, `Noche`), `cantidad_comensales` (1–4), `id_mesa` (FK → `Mesa`, NULL para espera), `estado` (`Confirmada`, `En_Lista_Espera`, `Arribo_Confirmado`, `Cancelada`, `Cancelada_Ausencia`), `fecha_hora_registro` e `id_usuario_registro` (FK → `Usuario`). Reserva y lista de espera comparten la entidad; no existe una tabla de dominio `Lista_Espera`.

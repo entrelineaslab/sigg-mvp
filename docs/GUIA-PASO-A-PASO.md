@@ -36,7 +36,7 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 - **Mozo:** ve Salón, Comanda y Despacho. Puede abrir una mesa, añadir productos a una comanda existente, marcar preparación/entrega y consultar estado de reservas sin datos ni acciones de confirmación.
 - **Jefe de Salón:** ve Salón, Comanda, Reservas/Espera y Despacho; no tiene KDS general. La acción excepcional sobre un plato solo se habilita cuando transcurrieron **más de 25 minutos** desde su envío, y se audita.
 - **Cocina:** ve KDS de solo lectura; las mutaciones de estado están protegidas por rol en servidor.
-- **Caja:** revisa cuentas, puede anular platos pendientes o en preparación con confirmación y auditoría, selecciona un método y registra un cobro.
+- **Caja:** revisa cuentas, puede anular platos en preparación con confirmación y auditoría, selecciona un método y registra un cobro.
 - **Administrador:** el perfil se mantiene, con rótulo “En desarrollo” y sin rutas, endpoints ni eventos operativos.
 
 ### Antes de un piloto controlado
@@ -51,7 +51,7 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 
 1. El Mozo toca una mesa libre. La mesa se abre directamente con dos comensales por defecto; puede ajustar el número dentro del aforo desde la pantalla de comanda.
 2. Selecciona una sección de carta, agrega los productos, ajusta cantidad y escribe observaciones completas (incluidas alergias o instrucciones).
-3. Pulsa “Enviar a cocina (KDS)”. Cada línea se almacena en `Detalle_Comanda` con `precio_unitario_historico`, `observaciones`, `fecha_hora_envio` y `estado_elaboracion='Pendiente'`.
+3. Pulsa “Enviar a cocina (KDS)”. Cada línea se almacena en `Detalle_Comanda` con `precio_unitario_historico`, `observaciones`, `fecha_hora_envio` y `estado_elaboracion='En_Preparacion'`.
 4. La clave `Idempotency-Key` evita duplicar una comanda si el cliente reintenta. Ante una caída de red, el navegador conserva el envío en almacenamiento local y lo reintenta al reconectar; el encabezado muestra desconexión. Si el servidor rechaza un envío, la tarjeta de recuperación conserva el pedido, explica el motivo y ofrece “Reintentar” o “Descartar” (este último pide confirmación).
 5. Para una mesa ocupada, pulsa “Ver Comanda”: abre la comanda activa y los nuevos ítems se agregan a esa misma cuenta. Despacho permanece separado.
 
@@ -59,7 +59,7 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 
 - **Cocina:** abre KDS. Las tarjetas se ordenan por antigüedad individual, se agrupan por sección y la pantalla rota páginas cada 10 segundos. El umbral de demora es más de 25 minutos. Las observaciones se muestran completas.
 - Si se pierde la conexión, el KDS queda atenuado y cubierto por un aviso de datos posiblemente desactualizados. Al reconectar, vuelve a consultar la fuente completa.
-- **Mozo:** desde Despacho, para cada ítem pendiente pulsa “Marcar en preparación”; luego de entregarlo físicamente, pulsa “Confirmar entrega a mesa”. El orden no se puede saltar: `Pendiente → En_Preparacion → Entregado`.
+- **Mozo:** desde Despacho, para cada ítem pendiente pulsa “Marcar en preparación”; luego de entregarlo físicamente, pulsa “Confirmar entrega a mesa”. El orden no se puede saltar: `En_Preparacion → Entregado`.
 - **Jefe:** la misma intervención se presenta como acción excepcional; el servidor devuelve error antes de que el plato supere 25 minutos. Cocina no muta la tarjeta.
 
 ## 6. Reservas y lista de espera
@@ -76,7 +76,7 @@ La ocupación actual no impide por sí sola hacer una reserva futura. El sistema
 ## 7. Caja y cierre
 
 1. Caja selecciona una cuenta activa y revisa los ítems y totales históricos.
-2. No se habilita el cierre si quedan productos `Pendiente` o `En_Preparacion`. Se puede esperar al despacho o anular explícitamente un plato aún no elaborado; esa anulación se audita y recalcula el total.
+2. No se habilita el cierre si quedan productos `En_Preparacion`. Se puede esperar al despacho o anular explícitamente un plato aún no elaborado; esa anulación se audita y recalcula el total.
 3. Elegir obligatoriamente un medio: `Efectivo`, `Tarjeta_Debito`, `Tarjeta_Credito` o `Transferencia_QR`.
 4. Si una operación electrónica es rechazada, la simulación deja la cuenta y la mesa abiertas y no crea `Transaccion_Cobro`; se puede seleccionar otro medio/reintentar. No es una conexión real con adquirente o banco.
 5. Al registrar el cobro válido, `Comanda.estado` pasa a `Cobrada_Cerrada` y la mesa vuelve a `Libre`.
