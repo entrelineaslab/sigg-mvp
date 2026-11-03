@@ -13,7 +13,7 @@ Seguir el prototipo Figma actualizado: identidad POS directa y legible; barra su
 ## Enfoque de implementación
 
 1. Preservar el DER y extender solo `Detalle_Comanda` con `fecha_hora_envio`; migrar los registros anteriores con un backup y usar la marca individual para FIFO, edad y el límite jerárquico de 25 minutos.
-2. Completar el ciclo secuencial Pendiente → En_Preparacion → Entregado. Cocina no muta su KDS pasivo. Mozo realiza el ciclo ordinario; Jefe solo interviene después de superar 25 minutos y el servidor valida el límite. Caja puede anular ítems aún no elaborados, con auditoría y recálculo.
+2. Completar el ciclo secuencial En_Preparacion → Entregado. Cocina no muta su KDS pasivo. Mozo realiza el ciclo ordinario; Jefe solo interviene después de superar 25 minutos y el servidor valida el límite. Caja puede anular ítems aún no elaborados, con auditoría y recálculo.
 3. Endurecer acceso por rol, mostrar la comanda activa al seleccionar una mesa ocupada, proteger las acciones de reservas frente al perfil Mozo, y sincronizar el salón, el KDS y despacho mediante eventos autenticados.
 4. Implementar edición/anulación de reservas, liberación de mesa y auditoría en cancelación/no-show, consentimiento antes de añadir a espera, filtros por fecha/turno, asignación FIFO como `Confirmada`/`Reservada` y confirmación de llegada en un paso separado.
 5. Hacer idempotente y durable el envío de comandas en el cliente, reintentarlo al reconectar y en ciclos de recuperación, proteger dobles toques por 500 ms, revisar hitos temporales con resolución de un segundo y registrar advertencias cuando un evento crítico supere 3 s de RTT de confirmación.

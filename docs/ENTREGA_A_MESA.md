@@ -4,7 +4,7 @@
 
 1. **Mozo** o **Jefe de Salón** abre Despacho; Mozo también puede abrirlo al tocar una mesa ocupada desde Salón.
 2. Se muestra cada ítem no entregado, agrupado por mesa/sección, con su estado, observaciones completas y edad desde `Detalle_Comanda.fecha_hora_envio`.
-3. El Mozo avanza cada ítem de forma secuencial: primero “Marcar en preparación”; después de llevarlo físicamente al cliente, “Confirmar entrega a mesa”. No se admite saltar `Pendiente → Entregado`.
+3. Cada ítem comienza en `En_Preparacion`. Después de llevarlo físicamente al cliente, el Mozo selecciona “Confirmar entrega a mesa”, pasando el ítem a `Entregado`. No se admite saltar el flujo definido.
 4. El Jefe mantiene el KDS general fuera de su menú. En Despacho solo puede ejecutar la intervención excepcional después de **más de 25 minutos** desde el envío; el servidor vuelve a validar el umbral y registra auditoría.
 5. La actualización queda en `Detalle_Comanda.estado_elaboracion`, se propaga por Socket.IO y permite a Caja habilitar el cierre cuando no quedan ítems pendientes de entrega/elaboración.
 
