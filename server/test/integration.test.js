@@ -76,21 +76,20 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.equal(rows.length,2,'el reintento no debe duplicar ítems');
   assert.equal(rows[0].observaciones,notes,'observaciones completas, sin recorte');
   assert.ok(rows[0].fecha_hora_envio,'fecha_hora_envio debe persistirse por ítem');
+  assert.deepEqual(rows.map(row=>row.estado_elaboracion),['En_Preparacion','En_Preparacion'],'cada plato inicia directamente En_Preparacion');
 
   const first=rows[0],second=rows[1];
-  const skip=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'delivered'});
-  assert.equal(skip.status,409,'no debe saltarse En_Preparacion');
-  const kitchenMutation=await request(`/order-items/${first.id_detalle}/status`,cocina,'PATCH',{status:'preparing'});
+  const removedState=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'queued'});
+  assert.equal(removedState.status,400,'queued solo pertenece a la cola offline, no al estado de elaboración');
+  const startPreparation=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'preparing'});
+  assert.equal(startPreparation.status,400,'la preparación es el estado inicial y no una transición solicitada desde Despacho');
+  const kitchenMutation=await request(`/order-items/${first.id_detalle}/status`,cocina,'PATCH',{status:'delivered'});
   assert.equal(kitchenMutation.status,403,'la pantalla de Cocina permanece de solo lectura');
-  const waiterStart=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'preparing'});
-  assert.equal(waiterStart.status,200,waiterStart.data.error);
   const waiterDeliver=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'delivered'});
   assert.equal(waiterDeliver.status,200,waiterDeliver.data.error);
-  const managerEarly=await request(`/order-items/${second.id_detalle}/status`,jefe,'PATCH',{status:'preparing'});
+  const managerEarly=await request(`/order-items/${second.id_detalle}/status`,jefe,'PATCH',{status:'delivered'});
   assert.equal(managerEarly.status,403,'Jefe no debe intervenir antes de 25 minutos');
   db.prepare('UPDATE Detalle_Comanda SET fecha_hora_envio=? WHERE id_detalle=?').run(new Date(Date.now()-26*60_000).toISOString(),second.id_detalle);
-  const managerStart=await request(`/order-items/${second.id_detalle}/status`,jefe,'PATCH',{status:'preparing'});
-  assert.equal(managerStart.status,200,managerStart.data.error);
   const managerDeliver=await request(`/order-items/${second.id_detalle}/status`,jefe,'PATCH',{status:'delivered'});
   assert.equal(managerDeliver.status,200,managerDeliver.data.error);
   assert.ok(db.prepare("SELECT COUNT(*) n FROM Registro_Auditoria WHERE accion LIKE 'Intervención jerárquica:%'").get().n>0);

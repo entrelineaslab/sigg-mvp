@@ -24,7 +24,7 @@ test('PU-03: semáforo de permanencia cambia solo al superar 40 minutos',()=>{
 });
 
 test('H3: los estados del plato avanzan sin saltos',()=>{
-  assert.equal(siguienteEstadoDetalle('Pendiente'),'En_Preparacion');
+  assert.equal(siguienteEstadoDetalle('Pendiente'),null,'Pendiente ya no es un estado del DER');
   assert.equal(siguienteEstadoDetalle('En_Preparacion'),'Entregado');
   assert.equal(siguienteEstadoDetalle('Entregado'),null);
   assert.equal(siguienteEstadoDetalle('Cancelado'),null);

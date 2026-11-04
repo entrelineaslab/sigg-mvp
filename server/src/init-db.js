@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import {migrarEstadosDetalleComanda} from './migrations.js';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const dbPath=process.env.DB_PATH?path.resolve(process.env.DB_PATH):path.join(here,'../db/entre-lineas.sqlite');
@@ -82,6 +83,8 @@ for(const [username,nombre,apellido,idRol] of demoUsers){
   insertDemoUser.run(username,nombre,apellido,bcrypt.hashSync('1234',10),idRol);
   insertDemoAccess.run(findUser.get(username).id_usuario);
 }
+const estadoMigration=await migrarEstadosDetalleComanda(db,dbPath);
+if(estadoMigration.migrated)console.log(`Migración de estados de plato aplicada; copia previa: ${path.basename(estadoMigration.backup)}`);
 db.pragma('foreign_key_check');
 console.log('Base DER en español inicializada. Usuarios demo: mozo/jefe/cocina/caja/admin; PIN: 1234.');
 db.close();

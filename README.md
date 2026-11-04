@@ -4,7 +4,7 @@ MVP de operación gastronómica para tablets y servidor local. Alineado a las pa
 
 ## Arquitectura y datos
 
-Node.js ejecuta Express y Socket.IO. SQLite es la base local, accedida desde Node mediante `better-sqlite3` con WAL. El archivo operativo de desarrollo está en `server/db/entre-lineas.sqlite`; el DDL está en `server/db/schema.sql`. Las nueve entidades y sus nombres de columna del DER se mantienen en español: `Mesa`, `Rol`, `Usuario`, `Seccion_Producto`, `Producto`, `Comanda`, `Detalle_Comanda`, `Reserva` y `Transaccion_Cobro`. La extensión `Detalle_Comanda.fecha_hora_envio` registra cuándo se envía cada ítem a cocina. La lista de espera se almacena en `Reserva` con `estado='En_Lista_Espera'`.
+Node.js ejecuta Express y Socket.IO. SQLite es la base local, accedida desde Node mediante `better-sqlite3` con WAL. El archivo operativo de desarrollo está en `server/db/entre-lineas.sqlite`; el DDL está en `server/db/schema.sql`. Las nueve entidades y sus nombres de columna del DER se mantienen en español: `Mesa`, `Rol`, `Usuario`, `Seccion_Producto`, `Producto`, `Comanda`, `Detalle_Comanda`, `Reserva` y `Transaccion_Cobro`. La extensión `Detalle_Comanda.fecha_hora_envio` registra cuándo se envía cada ítem a cocina. El estado de elaboración se limita a `En_Preparacion`, `Entregado` y `Cancelado`. La lista de espera se almacena en `Reserva` con `estado='En_Lista_Espera'`.
 
 La API usa algunos alias para la interfaz React, pero no son nombres de columnas ni tablas de SQLite. Tablas auxiliares técnicas: `Control_Acceso`, `Datos_Operacion_Comanda`, `Llave_Idempotencia` y `Registro_Auditoria`.
 
@@ -38,7 +38,7 @@ Abrir `http://localhost:5173`. La API y Socket.IO escuchan en el puerto `3001`; 
 
 `npm run db:init --prefix server` ejecuta el DDL y crea las cuentas/catálogos demo faltantes. El campo `fecha_hora_envio` se agrega con `ALTER TABLE`; los detalles anteriores se completan con la fecha de la comanda. La migración incremental crea un archivo `.pre-etapa3-<timestamp>.bak` antes de modificar la base. Al encontrar el esquema legado en inglés, el inicializador crea una copia `.pre-der-espanol-<timestamp>.bak`; si detecta comandas, detalles, reservas, espera o cobros en ese esquema, se detiene para que se revise la conversión.
 
-El inicializador no elimina transacciones. Los usuarios y productos ya existentes no deben sobrescribirse al volver a ejecutar el DDL: las semillas se insertan solo si faltan. Aun así, antes de usar una base del restaurante, hacer una copia manual, probar restauración y revisar las migraciones con el equipo responsable. Las pruebas no usan este archivo: inicializan su propia base SQLite temporal.
+El inicializador no elimina transacciones. Los usuarios y precios de productos ya existentes se preservan al volver a ejecutar el DDL; los datos descriptivos de productos semilla se sincronizan sin reemplazar el precio configurado. Aun así, antes de usar una base del restaurante, hacer una copia manual, probar restauración y revisar las migraciones con el equipo responsable. Las pruebas no usan este archivo: inicializan su propia base SQLite temporal.
 
 ## Usuarios de demostración
 
@@ -61,7 +61,7 @@ Para cambiar el PIN de un perfil, desde la raíz ejecuta, por ejemplo, `npm run 
 ## Flujos disponibles
 
 - **Salón y comanda:** una pulsación en una mesa libre abre una comanda con dos comensales por defecto; el aforo se ajusta en la pantalla. Un toque en “Ver Comanda” para una mesa ocupada abre la comanda existente. Cada ítem guarda precio histórico, observaciones completas y hora individual de envío; la clave idempotente protege los reintentos.
-- **Preparación y entrega:** el ciclo del ítem es `En_Preparacion → Entregado`; no se aceptan saltos. Mozo confirma la preparación y la entrega. Jefe solo puede intervenir por demora superior a 25 minutos y queda auditado. Caja no puede cerrar una cuenta con platos pendientes; permite anular explícitamente platos pendientes/en preparación y recalcula.
+- **Preparación y entrega:** los ítems nacen en `En_Preparacion` y el ciclo es `En_Preparacion → Entregado`. Mozo confirma la entrega; Jefe puede hacerlo como intervención jerárquica solo después de superar 25 minutos, con auditoría. Caja no cierra mientras haya ítems en preparación, aunque permite anularlos explícitamente y recalcula. `queued` pertenece únicamente a la cola offline del navegador, no al estado de elaboración.
 - **Desconexión:** los pedidos enviados durante un microcorte quedan en almacenamiento local del navegador y se reintentan con la misma clave al reconectar y durante el ciclo de recuperación. Si el servidor rechaza permanentemente uno, queda retenido con el error visible y el usuario puede reintentar o descartarlo con confirmación. En el KDS se advierte cuando la vista puede estar desactualizada y se resincroniza al volver la conexión.
 - **Reservas y lista de espera:** se filtran por fecha y turno; la ausencia genera alerta a 10 minutos y cancelación a 15. Anular una reserva libera su mesa cuando corresponde y genera auditoría. El backend asigna al primer grupo elegible por orden de registro y capacidad; asignar mesa crea `Confirmada/Reservada`, no comanda. La llegada se confirma por separado y entonces crea la comanda.
 - **KDS:** solo lectura, ordena por fecha/hora individual más antigua, marca el umbral de 25 minutos, muestra observaciones íntegras y rota páginas cada 10 segundos.
@@ -77,7 +77,7 @@ npm test --prefix server
 npm run build --prefix client
 ```
 
-Las pruebas unitarias revisan capacidad, total monetario histórico, límite de permanencia y estados secuenciales. La prueba de integración crea una base temporal desechable y cubre permisos, idempotencia, observaciones largas, timestamps, estados por rol, reserva futura, filtros, edición/anulación, prioridad FIFO por capacidad, confirmación de llegada, rechazo de pago, cierre de Caja y monitor de no-show. No altera el archivo de demostración. El resultado y sus límites están en [Resultados de pruebas Etapa 3](docs/PRUEBAS-ETAPA3.md).
+Las pruebas unitarias revisan capacidad, total monetario histórico, límite de permanencia y estados secuenciales. Una prueba de migración reconstruye `Detalle_Comanda`, convierte registros antiguos `Pendiente` a `En_Preparacion`, conserva los datos y verifica el nuevo `CHECK`. Las pruebas de integración crean bases temporales desechables y cubren permisos, idempotencia, estados por rol, reservas, Caja y eventos Socket.IO; no alteran el archivo de demostración. El resultado y sus límites están en [Resultados de pruebas Etapa 3](docs/PRUEBAS-ETAPA3.md).
 
 ## Regla temporal pendiente de aprobación
 

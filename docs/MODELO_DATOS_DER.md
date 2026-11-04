@@ -52,3 +52,8 @@ El hallazgo H2/H30 requiere medir edad y FIFO por **plato enviado**, no por aper
 ## DDL y migración
 
 DDL: `server/db/schema.sql`. Base de desarrollo: `server/db/entre-lineas.sqlite`. La migración aditiva crea `.pre-etapa3-<timestamp>.bak` antes de agregar `fecha_hora_envio`. La migración histórica desde el modelo inicial en inglés crea `.pre-der-espanol-<timestamp>.bak` y se detiene si encuentra transacciones que aún necesiten conversión; no borra comandas reales.
+
+
+### Migración de estados de elaboración
+
+El estado oficial de `Detalle_Comanda.estado_elaboracion` es `En_Preparacion`, `Entregado` o `Cancelado`. Al actualizar una instalación antigua, el migrador crea un backup SQLite, reconstruye la tabla con el nuevo `CHECK`, convierte registros históricos `Pendiente` a `En_Preparacion` y conserva IDs, cantidades, precios históricos, observaciones, marcas de tiempo e índices. La operación es idempotente; se debe revisar el mensaje de backup antes de continuar con una base operativa.

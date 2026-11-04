@@ -10,6 +10,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {MINUTES,calcularTotalComanda,elapsedMs as domainElapsedMs,evaluarEstadoPermanencia,siguienteEstadoDetalle,validarCapacidadMesa} from './domain.js';
 import {registerReservationRoutes} from './reservations.js';
+import {migrarEstadosDetalleComanda} from './migrations.js';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const dbPath=process.env.DB_PATH?path.resolve(process.env.DB_PATH):path.join(here,'../db/entre-lineas.sqlite');
@@ -25,6 +26,8 @@ if(hasTable('Detalle_Comanda')&&!db.prepare('PRAGMA table_info(Detalle_Comanda)'
   db.exec('CREATE INDEX IF NOT EXISTS ix_Detalle_Comanda_kds_fifo ON Detalle_Comanda(estado_elaboracion,fecha_hora_envio,id_detalle)');
   console.warn(`Migración fecha_hora_envio; respaldo ${path.basename(backup)}`);
 }
+const estadoMigration=await migrarEstadosDetalleComanda(db,dbPath);
+if(estadoMigration.migrated)console.warn(`Migración de estados de plato aplicada; respaldo ${path.basename(estadoMigration.backup)}`);
 const app=express();
 const httpServer=createServer(app);
 const io=new Server(httpServer,{cors:{origin:process.env.CLIENT_ORIGIN||'*'}});
@@ -46,8 +49,8 @@ const amountToCents=amount=>Math.round(Number(amount)*100);
 const elapsedMs=stamp=>domainElapsedMs(toDate(stamp),Date.now());
 const elapsedText=stamp=>{const m=Math.floor(elapsedMs(stamp)/60000);return`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`};
 const apiStatus={Libre:'free',Reservada:'reserved',Alerta_Reserva:'alert_reservation',Ocupada:'occupied',Alerta_Permanencia:'alert'};
-const detailStatus={Pendiente:'queued',En_Preparacion:'preparing',Entregado:'delivered',Cancelado:'void'};
-const dbDetailStatus={queued:'Pendiente',preparing:'En_Preparacion',delivered:'Entregado',void:'Cancelado'};
+const detailStatus={En_Preparacion:'preparing',Entregado:'delivered',Cancelado:'void'};
+const dbDetailStatus={preparing:'En_Preparacion',delivered:'Entregado',void:'Cancelado'};
 // H33/H34: mantener hasta aprobación del equipo; no asumir el buffer propuesto de 40 min.
 const RESERVATION_PREBLOCK_MINUTES=180;
 const auth=(req,res,next)=>{try{req.user=jwt.verify((req.headers.authorization||'').replace(/^Bearer /,''),secret);next()}catch{return res.status(401).json({error:'Autenticación requerida'})}};
@@ -192,7 +195,7 @@ app.post('/api/orders',auth,allow(...rolePermissions.waiter),(req,res)=>{
       db.prepare('UPDATE Datos_Operacion_Comanda SET cantidad_comensales=? WHERE id_comanda=?').run(partySize,comanda.id_comanda);
       const sentAt=nowIso();
       const add=db.prepare(`INSERT INTO Detalle_Comanda(id_comanda,id_producto,cantidad,precio_unitario_historico,observaciones,fecha_hora_envio,estado_elaboracion)
-        VALUES(?,?,?,?,?,?,'Pendiente')`);
+        VALUES(?,?,?,?,?,?,'En_Preparacion')`);
       for(const item of items){
         const producto=db.prepare('SELECT * FROM Producto WHERE id_producto=?').get(item.menuItemId);
         const qty=Number(item.quantity);
@@ -228,7 +231,7 @@ const activeItemQuery=`SELECT d.id_detalle item_id,c.id_comanda order_id,printf(
   d.estado_elaboracion FROM Detalle_Comanda d JOIN Comanda c ON c.id_comanda=d.id_comanda
   JOIN Mesa m ON m.id_mesa=c.id_mesa JOIN Producto p ON p.id_producto=d.id_producto
   JOIN Seccion_Producto s ON s.id_seccion=p.id_seccion
-  WHERE c.estado='En_Proceso' AND d.estado_elaboracion IN ('Pendiente','En_Preparacion')`;
+  WHERE c.estado='En_Proceso' AND d.estado_elaboracion='En_Preparacion'`;
 const itemDto=rows=>rows.map(x=>({...x,created_at:x.sent_at,status:detailStatus[x.estado_elaboracion],delayed:elapsedMs(x.sent_at)>25*MINUTES}));
 app.get('/api/kds',auth,allow(...rolePermissions.kitchen),(_req,res)=>{
   res.json(itemDto(db.prepare(`${activeItemQuery} ORDER BY d.fecha_hora_envio,d.id_detalle`).all()));
@@ -238,7 +241,7 @@ app.get('/api/dispatch/items',auth,allow(...rolePermissions.waiter),(_req,res)=>
 });
 app.patch('/api/order-items/:id/status',auth,allow(...rolePermissions.waiter),(req,res)=>{
   const{status}=req.body||{},target=dbDetailStatus[status];
-  if(!target||!['En_Preparacion','Entregado'].includes(target))return res.status(400).json({error:'El cambio debe ser secuencial: Pendiente → En_Preparacion → Entregado'});
+  if(target!=='Entregado')return res.status(400).json({error:'Solo se admite confirmar Entregado; los ítems ya comienzan En_Preparacion'});
   const item=db.prepare(`SELECT d.*,c.estado estado_comanda,c.id_mesa,m.numero
     FROM Detalle_Comanda d JOIN Comanda c ON c.id_comanda=d.id_comanda
     JOIN Mesa m ON m.id_mesa=c.id_mesa WHERE d.id_detalle=?`).get(req.params.id);
@@ -252,7 +255,7 @@ app.patch('/api/order-items/:id/status',auth,allow(...rolePermissions.waiter),(r
   const result=db.transaction(()=>{
     const updated=db.prepare('UPDATE Detalle_Comanda SET estado_elaboracion=? WHERE id_detalle=? AND estado_elaboracion=?').run(target,item.id_detalle,item.estado_elaboracion);
     if(!updated.changes)throw new Error('El estado cambió en otra terminal; actualiza la pantalla');
-    const action=target==='Entregado'?'Entrega confirmada en mesa':'Inicio de preparación registrado';
+    const action='Entrega confirmada en mesa';
     audit(req.user,req.user.role==='salon_manager'?`Intervención jerárquica: ${action}`:action,'Detalle_Comanda',item.id_detalle,{id_comanda:item.id_comanda,id_mesa:item.id_mesa,estado_anterior:item.estado_elaboracion,estado_nuevo:target,demora_ms:elapsed});
     return updated.changes;
   })();
@@ -289,7 +292,7 @@ app.post('/api/cashier/orders/:orderId/items/:itemId/cancel',auth,allow(...roleP
       const item=db.prepare(`SELECT d.*,c.estado estado_comanda,c.id_mesa FROM Detalle_Comanda d JOIN Comanda c ON c.id_comanda=d.id_comanda WHERE d.id_detalle=? AND d.id_comanda=?`)
         .get(req.params.itemId,req.params.orderId);
       if(!item||item.estado_comanda!=='En_Proceso')throw new Error('Ítem o cuenta activa no encontrada');
-      if(!['Pendiente','En_Preparacion'].includes(item.estado_elaboracion))throw new Error('Solo puede anularse un plato pendiente o en preparación');
+      if(item.estado_elaboracion!=='En_Preparacion')throw new Error('Solo puede anularse un plato que todavía está en preparación');
       const changed=db.prepare(`UPDATE Detalle_Comanda SET estado_elaboracion='Cancelado' WHERE id_detalle=? AND estado_elaboracion=?`).run(item.id_detalle,item.estado_elaboracion);
       if(!changed.changes)throw new Error('El estado cambió en otra terminal');
       audit(req.user,'Plato no elaborado anulado en Caja','Detalle_Comanda',item.id_detalle,{id_comanda:item.id_comanda,estado_anterior:item.estado_elaboracion});

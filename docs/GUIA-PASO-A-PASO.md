@@ -59,7 +59,7 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 
 - **Cocina:** abre KDS. Las tarjetas se ordenan por antigüedad individual, se agrupan por sección y la pantalla rota páginas cada 10 segundos. El umbral de demora es más de 25 minutos. Las observaciones se muestran completas.
 - Si se pierde la conexión, el KDS queda atenuado y cubierto por un aviso de datos posiblemente desactualizados. Al reconectar, vuelve a consultar la fuente completa.
-- **Mozo:** desde Despacho, para cada ítem pendiente pulsa “Marcar en preparación”; luego de entregarlo físicamente, pulsa “Confirmar entrega a mesa”. El orden no se puede saltar: `En_Preparacion → Entregado`.
+- **Mozo:** desde Despacho, cada ítem ya aparece `En_Preparacion` al enviarse a cocina. Luego de llevarlo físicamente, pulsa “Confirmar entrega a mesa”; el único avance es `En_Preparacion → Entregado`.
 - **Jefe:** la misma intervención se presenta como acción excepcional; el servidor devuelve error antes de que el plato supere 25 minutos. Cocina no muta la tarjeta.
 
 ## 6. Reservas y lista de espera

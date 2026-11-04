@@ -19,7 +19,7 @@ export function evaluarEstadoPermanencia(horaApertura,horaActual=Date.now()){
   return elapsedMs(horaApertura,horaActual)>40*MINUTES?'Alerta_Permanencia':'Ocupada';
 }
 
-const transiciones={Pendiente:'En_Preparacion',En_Preparacion:'Entregado'};
+const transiciones={En_Preparacion:'Entregado'};
 export function siguienteEstadoDetalle(estadoActual){return transiciones[estadoActual]||null;}
 
 export function fechaLocalArgentina(iso){
