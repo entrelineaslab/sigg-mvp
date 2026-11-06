@@ -14,11 +14,12 @@ Seguir el prototipo Figma actualizado: identidad POS directa y legible; barra su
 
 1. Preservar el DER y extender solo `Detalle_Comanda` con `fecha_hora_envio`; migrar los registros anteriores con un backup y usar la marca individual para FIFO, edad y el límite jerárquico de 25 minutos.
 2. Completar el ciclo secuencial En_Preparacion → Entregado. Cocina no muta su KDS pasivo. Mozo realiza el ciclo ordinario; Jefe solo interviene después de superar 25 minutos y el servidor valida el límite. Caja puede anular ítems aún no elaborados, con auditoría y recálculo.
-3. Endurecer acceso por rol, mostrar la comanda activa al seleccionar una mesa ocupada, proteger las acciones de reservas frente al perfil Mozo, y sincronizar el salón, el KDS y despacho mediante eventos autenticados.
-4. Implementar edición/anulación de reservas, liberación de mesa y auditoría en cancelación/no-show, consentimiento antes de añadir a espera, filtros por fecha/turno, asignación FIFO como `Confirmada`/`Reservada` y confirmación de llegada en un paso separado.
-5. Hacer idempotente y durable el envío de comandas en el cliente, reintentarlo al reconectar y en ciclos de recuperación, proteger dobles toques por 500 ms, revisar hitos temporales con resolución de un segundo y registrar advertencias cuando un evento crítico supere 3 s de RTT de confirmación.
-6. Ordenar KDS por antigüedad, rotar páginas cada 10 s, elevar tamaño/contraste de las tarjetas y mostrar observaciones completas. En Caja exigir método explícito; una simulación de rechazo electrónico no debe mutar transacción, comanda ni mesa.
-7. Añadir pruebas con `node:test`, en particular en un archivo SQLite temporal para no tocar los datos locales durante integración; documentar instalación, uso, CRUD, limitaciones y resultados medidos.
+3. Permitir la cancelación de una comanda únicamente cuando todavía no se haya entregado ningún ítem. Al cancelar la comanda, su estado pasa a Cancelada, los detalles que permanezcan en En_Preparacion pasan a Cancelado, la mesa se libera y la acción queda registrada en auditoría. Si existe al menos un ítem en estado Entregado, la comanda no puede cancelarse y debe continuar hasta el cobro.
+4. Endurecer acceso por rol, mostrar la comanda activa al seleccionar una mesa ocupada, proteger las acciones de reservas frente al perfil Mozo, y sincronizar el salón, el KDS y despacho mediante eventos autenticados.
+5. Implementar edición/anulación de reservas, liberación de mesa y auditoría en cancelación/no-show, consentimiento antes de añadir a espera, filtros por fecha/turno, asignación FIFO como `Confirmada`/`Reservada` y confirmación de llegada en un paso separado.
+6. Hacer idempotente y durable el envío de comandas en el cliente, reintentarlo al reconectar y en ciclos de recuperación, proteger dobles toques por 500 ms, revisar hitos temporales con resolución de un segundo y registrar advertencias cuando un evento crítico supere 3 s de RTT de confirmación.
+7. Ordenar KDS por antigüedad, rotar páginas cada 10 s, elevar tamaño/contraste de las tarjetas y mostrar observaciones completas. En Caja exigir método explícito; una simulación de rechazo electrónico no debe mutar transacción, comanda ni mesa.
+8. Añadir pruebas con `node:test`, en particular en un archivo SQLite temporal para no tocar los datos locales durante integración; documentar instalación, uso, CRUD, limitaciones y resultados medidos.
 
 ## Regla temporal aún pendiente del equipo
 

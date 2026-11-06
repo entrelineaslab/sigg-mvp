@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS Comanda (
   id_mesa INTEGER NOT NULL REFERENCES Mesa(id_mesa),
   id_usuario INTEGER NOT NULL REFERENCES Usuario(id_usuario),
   fecha_hora TEXT NOT NULL DEFAULT (datetime('now')),
-  estado TEXT NOT NULL DEFAULT 'En_Proceso' CHECK(estado IN ('En_Proceso','Cobrada_Cerrada'))
+  estado TEXT NOT NULL DEFAULT 'En_Proceso' CHECK(estado IN ('En_Proceso','Cobrada_Cerrada','Cancelada'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_Comanda_mesa_en_proceso
   ON Comanda(id_mesa) WHERE estado = 'En_Proceso';
@@ -114,7 +114,7 @@ INSERT INTO Producto(id_producto,id_seccion,nombre,descripcion,precio) VALUES
 ON CONFLICT(id_producto) DO UPDATE SET
   id_seccion=excluded.id_seccion,
   nombre=excluded.nombre,
-  descripcion=excluded.descripcion;
+  descripcion=excluded.descripcion,
   precio=excluded.precio;
 
 -- Tablas técnicas auxiliares (no agregan campos a las entidades del DER).

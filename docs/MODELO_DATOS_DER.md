@@ -20,7 +20,7 @@ El esquema SQLite conserva los nombres de las nueve entidades y los atributos de
 `id_producto` (PK), `nombre`, `descripcion`, `precio` (DECIMAL) e `id_seccion` (FK → `Seccion_Producto`).
 
 ### Comanda
-`id_comanda` (PK), `id_mesa` (FK → `Mesa`), `id_usuario` (FK → `Usuario`), `fecha_hora` (DATETIME) y `estado` (`En_Proceso`, `Cobrada_Cerrada`). Un índice único parcial garantiza como máximo una comanda `En_Proceso` por mesa.
+`id_comanda` (PK), `id_mesa` (FK → `Mesa`), `id_usuario` (FK → `Usuario`), `fecha_hora` (DATETIME) y `estado` (`En_Proceso`, `Cobrada_Cerrada`, `Cancelada`). Un índice único parcial garantiza como máximo una comanda `En_Proceso` por mesa. La comanda puede pasar al estado `Cancelada` únicamente si ninguno de sus ítems fue entregado.
 
 ### Detalle_Comanda
 `id_detalle` (PK), `id_comanda` (FK → `Comanda`), `id_producto` (FK → `Producto`), `cantidad`, `precio_unitario_historico` (DECIMAL), `observaciones` y `estado_elaboracion` (`En_Preparacion`, `Entregado`, `Cancelado`). El precio queda fijado al agregar el ítem.
