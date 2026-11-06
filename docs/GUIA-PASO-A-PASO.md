@@ -54,6 +54,7 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 3. Pulsa “Enviar a cocina (KDS)”. Cada línea se almacena en `Detalle_Comanda` con `precio_unitario_historico`, `observaciones`, `fecha_hora_envio` y `estado_elaboracion='En_Preparacion'`.
 4. La clave `Idempotency-Key` evita duplicar una comanda si el cliente reintenta. Ante una caída de red, el navegador conserva el envío en almacenamiento local y lo reintenta al reconectar; el encabezado muestra desconexión. Si el servidor rechaza un envío, la tarjeta de recuperación conserva el pedido, explica el motivo y ofrece “Reintentar” o “Descartar” (este último pide confirmación).
 5. Para una mesa ocupada, pulsa “Ver Comanda”: abre la comanda activa y los nuevos ítems se agregan a esa misma cuenta. Despacho permanece separado.
+6. Si los comensales se retiran antes de recibir algún plato, la comanda solo puede cancelarse si todavía no se entregó ningún ítem. Al cancelar la comanda, los ítems que permanezcan en "En_Preparacion" pasan a "Cancelado" y la mesa vuelve a "Libre". Si existe al menos un ítem "Entregado", la comanda no puede cancelarse y debe continuar hasta el cobro.
 
 ## 5. Cocina y entrega a la mesa
 
