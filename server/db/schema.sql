@@ -115,6 +115,7 @@ ON CONFLICT(id_producto) DO UPDATE SET
   id_seccion=excluded.id_seccion,
   nombre=excluded.nombre,
   descripcion=excluded.descripcion;
+  precio=excluded.precio;
 
 -- Tablas técnicas auxiliares (no agregan campos a las entidades del DER).
 CREATE TABLE IF NOT EXISTS Control_Acceso (
