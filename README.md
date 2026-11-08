@@ -2,6 +2,17 @@
 
 MVP de operación gastronómica para tablets y servidor local. Alineado a las pantallas Figma, al DER en español y a los hallazgos de Etapa 3. Incluye Salón, Comanda, Reservas/Espera, KDS, Despacho y Caja.
 
+## Inicio rápido
+
+Clona el repositorio y entra a la carpeta:
+
+```bash
+git clone https://github.com/entrelineaslab/sigg-mvp.git
+cd sigg-mvp
+```
+
+La [guía paso a paso](docs/GUIA-PASO-A-PASO.md) es la entrada recomendada para instalar y ejecutar el proyecto. Consulta también los [resultados de pruebas de Etapa 3](docs/PRUEBAS-ETAPA3.md).
+
 ## Arquitectura y datos
 
 Node.js ejecuta Express y Socket.IO. SQLite es la base local, accedida desde Node mediante `better-sqlite3` con WAL. El archivo operativo de desarrollo está en `server/db/entre-lineas.sqlite`; el DDL está en `server/db/schema.sql`. Las nueve entidades y sus nombres de columna del DER se mantienen en español: `Mesa`, `Rol`, `Usuario`, `Seccion_Producto`, `Producto`, `Comanda`, `Detalle_Comanda`, `Reserva` y `Transaccion_Cobro`. La extensión `Detalle_Comanda.fecha_hora_envio` registra cuándo se envía cada ítem a cocina. El estado de elaboración se limita a `En_Preparacion`, `Entregado` y `Cancelado`. La lista de espera se almacena en `Reserva` con `estado='En_Lista_Espera'`.
@@ -10,14 +21,19 @@ La API usa algunos alias para la interfaz React, pero no son nombres de columnas
 
 ## Requisitos e instalación
 
-Requiere Node.js 20+ y npm. Desde la raíz del proyecto:
+Requiere Node.js 20+ y npm. Desde la raíz del proyecto, instala dependencias y copia los archivos de entorno **antes** de inicializar la base:
 
 ```bash
 npm install --prefix server
 npm install --prefix client
+```
+
+En Windows **cmd** usa `copy server\.env.example server\.env` y `copy client\.env.example client\.env`. En PowerShell usa `Copy-Item server/.env.example server/.env` y `Copy-Item client/.env.example client/.env`. El comando `cp` que aparece en algunas instrucciones solo corresponde a Git Bash, Linux o macOS. Si los archivos `.env` ya existen, no los sobrescribas: consérvalos y edítalos según sea necesario.
+
+Luego, inicializa la base de desarrollo:
+
+```bash
 npm run db:init --prefix server
-cp server/.env.example server/.env
-cp client/.env.example client/.env
 ```
 
 Antes de un piloto, reemplazar el `JWT_SECRET` de `server/.env` por uno aleatorio y cambiar el PIN demo.
@@ -35,6 +51,27 @@ npm run dev --prefix client
 Abrir `http://localhost:5173`. La API y Socket.IO escuchan en el puerto `3001`; Vite ya enlaza el puerto `5173` a `0.0.0.0`. Para tablets, definir `VITE_API_URL=http://IP_DEL_SERVIDOR:3001` en `client/.env` y `CLIENT_ORIGIN=http://IP_DEL_SERVIDOR:5173` en `server/.env`. Si se usa un hostname en lugar de una IP, configurar `VITE_ALLOWED_HOST` con ese hostname. No se necesita Internet entre cliente y servidor de la LAN; la red local, el equipo servidor y la alimentación eléctrica sí deben estar disponibles. Esta configuración de desarrollo usa HTTP, no es una instalación endurecida para producción.
 
 ## Base existente, backup y migración
+
+La ruta predeterminada de SQLite es `server/db/entre-lineas.sqlite` (salvo que `DB_PATH` en `server/.env` indique otra ruta). La aplicación usa WAL; al reiniciar desde cero elimina **todos los datos** de la base objetivo. Para volver al estado de fábrica en desarrollo:
+
+1. Detén el servidor con `Ctrl+C` en su terminal y confirma que no quede ningún proceso de la aplicación usando la base.
+2. Antes de borrar nada, crea una copia de seguridad. Por ejemplo, en PowerShell:
+
+   ```powershell
+   Copy-Item server/db/entre-lineas.sqlite server/db/entre-lineas.sqlite.manual.bak
+   ```
+
+   En Windows cmd: `copy server\db\entre-lineas.sqlite server\db\entre-lineas.sqlite.manual.bak`. En Git Bash/Linux/macOS: `cp server/db/entre-lineas.sqlite server/db/entre-lineas.sqlite.manual.bak`. Si `DB_PATH` apunta a otra ubicación, respalda ese archivo en vez de la ruta predeterminada. Verifica que el respaldo exista antes de continuar.
+3. Con la aplicación detenida y el respaldo verificado, elimina el archivo principal y, si existen, los auxiliares WAL/SHM (`entre-lineas.sqlite-wal` y `entre-lineas.sqlite-shm`) de la **misma** ubicación. En PowerShell, por ejemplo:
+
+   ```powershell
+   Remove-Item server/db/entre-lineas.sqlite, server/db/entre-lineas.sqlite-wal, server/db/entre-lineas.sqlite-shm -ErrorAction SilentlyContinue
+   ```
+
+   En cmd elimina únicamente esas rutas explícitas con `del /q server\db\entre-lineas.sqlite server\db\entre-lineas.sqlite-wal server\db\entre-lineas.sqlite-shm`; no uses comodines, porque podrían borrar también el respaldo. Git Bash/Linux/macOS puede usar `rm -f server/db/entre-lineas.sqlite server/db/entre-lineas.sqlite-wal server/db/entre-lineas.sqlite-shm`. No borres el respaldo.
+4. Inicializa de nuevo desde la raíz con `npm run db:init --prefix server`.
+
+**Advertencia:** borrar la base elimina comandas, reservas, cobros, usuarios y cualquier otro dato guardado. No uses este procedimiento en una base operativa; conserva y prueba el respaldo antes de proceder.
 
 `npm run db:init --prefix server` ejecuta el DDL y crea las cuentas/catálogos demo faltantes. El campo `fecha_hora_envio` se agrega con `ALTER TABLE`; los detalles anteriores se completan con la fecha de la comanda. La migración incremental crea un archivo `.pre-etapa3-<timestamp>.bak` antes de modificar la base. Al encontrar el esquema legado en inglés, el inicializador crea una copia `.pre-der-espanol-<timestamp>.bak`; si detecta comandas, detalles, reservas, espera o cobros en ese esquema, se detiene para que se revise la conversión.
 
@@ -60,12 +97,12 @@ Para cambiar el PIN de un perfil, desde la raíz ejecuta, por ejemplo, `npm run 
 
 ## Flujos disponibles
 
-- **Salón y comanda:** una pulsación en una mesa libre abre una comanda con dos comensales por defecto; el aforo se ajusta en la pantalla. Un toque en “Ver Comanda” para una mesa ocupada abre la comanda existente. Cada ítem guarda precio histórico, observaciones completas y hora individual de envío; la clave idempotente protege los reintentos. La comanda solo puede cancelarse si todavía no se entregó ningún ítem. En ese caso, los ítems en estado En_Preparacion pasan a Cancelado y la mesa se libera. Si existe al menos un ítem en estado Entregado, la comanda debe continuar hasta el cobro.
+- **Salón y comanda:** al tocar una mesa libre, el Mozo confirma la cantidad de comensales (1–4, según la capacidad). La mesa queda ocupada sin Comanda hasta que se envía el primer plato. Si el grupo se retira sin pedir, puede usarse “Liberar mesa”; la acción se bloquea cuando quedan platos activos. En una mesa con cuenta activa, “Ver Comanda” abre la misma cuenta. Cada ítem guarda precio histórico, observaciones completas y hora individual de envío; la clave idempotente protege los reintentos.
 - **Preparación y entrega:** los ítems nacen en `En_Preparacion` y el ciclo es `En_Preparacion → Entregado`. Mozo confirma la entrega; Jefe puede hacerlo como intervención jerárquica solo después de superar 25 minutos, con auditoría. Caja no cierra mientras haya ítems en preparación, aunque permite anularlos explícitamente y recalcula. `queued` pertenece únicamente a la cola offline del navegador, no al estado de elaboración.
 - **Desconexión:** los pedidos enviados durante un microcorte quedan en almacenamiento local del navegador y se reintentan con la misma clave al reconectar y durante el ciclo de recuperación. Si el servidor rechaza permanentemente uno, queda retenido con el error visible y el usuario puede reintentar o descartarlo con confirmación. En el KDS se advierte cuando la vista puede estar desactualizada y se resincroniza al volver la conexión.
-- **Reservas y lista de espera:** se filtran por fecha y turno; la ausencia genera alerta a 10 minutos y cancelación a 15. Anular una reserva libera su mesa cuando corresponde y genera auditoría. El backend asigna al primer grupo elegible por orden de registro y capacidad; asignar mesa crea `Confirmada/Reservada`, no comanda. La llegada se confirma por separado y entonces crea la comanda.
+- **Reservas y lista de espera:** se filtran por fecha y turno; la ausencia genera alerta a 10 minutos y cancelación a 15. Anular una reserva libera su mesa cuando corresponde y genera auditoría. El backend asigna al primer grupo elegible por orden de registro y capacidad; asignar mesa crea `Confirmada/Reservada`, no Comanda. Si al llegar la mesa asignada todavía está ocupada, **Llegó / Sentar** reasigna el grupo a una mesa libre compatible, informa cuál es y crea allí la Comanda; si no existe alternativa, deja la reserva pendiente y muestra cómo resolverlo.
 - **KDS:** solo lectura, ordena por fecha/hora individual más antigua, marca el umbral de 25 minutos, muestra observaciones íntegras y rota páginas cada 10 segundos.
-- **Caja:** no preselecciona medio de pago. Soporta `Efectivo`, `Tarjeta_Debito`, `Tarjeta_Credito` y `Transferencia_QR`. La acción “Simular rechazo” es exclusivamente de prueba: no registra cobro, no cierra comanda ni libera mesa. No hay integración real con adquirentes ni bancos.
+- **Caja:** el detalle muestra el nombre principal de cada plato y su descripción secundaria, junto con cantidades, precios históricos y subtotales. No preselecciona medio de pago. Soporta `Efectivo`, `Tarjeta_Debito`, `Tarjeta_Credito` y `Transferencia_QR`. La acción “Simular rechazo” es exclusivamente de prueba: no registra cobro, no cierra comanda ni libera mesa. No hay integración real con adquirentes ni bancos.
 - **Tiempo real:** eventos críticos requieren reconocimiento de clientes Socket.IO; el servidor registra una advertencia si su RTT supera 3 segundos. Esto instrumenta el criterio, pero no equivale a una medición ni certificación de latencia en la red del restaurante.
 
 ## Pruebas
@@ -77,7 +114,7 @@ npm test --prefix server
 npm run build --prefix client
 ```
 
-Las pruebas unitarias revisan capacidad, total monetario histórico, límite de permanencia y estados secuenciales. Una prueba de migración reconstruye `Detalle_Comanda`, convierte registros antiguos `Pendiente` a `En_Preparacion`, conserva los datos y verifica el nuevo `CHECK`. Las pruebas de integración crean bases temporales desechables y cubren permisos, idempotencia, estados por rol, reservas, Caja y eventos Socket.IO; no alteran el archivo de demostración. El resultado y sus límites están en [Resultados de pruebas Etapa 3](docs/PRUEBAS-ETAPA3.md).
+Las pruebas unitarias revisan capacidad, total monetario histórico, límite de permanencia y estados secuenciales. Una prueba de migración reconstruye `Detalle_Comanda`, convierte registros antiguos `Pendiente` a `En_Preparacion`, conserva los datos y verifica el nuevo `CHECK`. Las pruebas de integración crean bases temporales desechables y cubren permisos, idempotencia, estados por rol, reservas, Caja y eventos Socket.IO; no alteran el archivo de demostración.
 
 ## Regla temporal pendiente de aprobación
 

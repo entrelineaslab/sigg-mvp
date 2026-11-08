@@ -119,6 +119,43 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.ok(filteredReservations.data.some(item=>item.id===futureReservation.data.id),'filtra reservas por fecha y turno');
   const edited=await request(`/reservations/${futureReservation.data.id}`,jefe,'PATCH',{guestName:'Reserva futura editada',partySize:3,reservedFor:new Date(Date.now()+7*60*60_000).toISOString(),turno:'Noche',tableId:table.id});
   assert.equal(edited.status,200,edited.data.error);assert.equal(edited.data.party_size,3);
+  const occupiedReservation=await request('/reservations',jefe,'POST',{guestName:'Grupo reasignado al llegar',partySize:2,tableId:table.id,reservedFor:new Date(Date.now()+12*60*60_000).toISOString(),turno:'Noche'});
+  assert.equal(occupiedReservation.status,201,occupiedReservation.data.error);
+  assert.equal(occupiedReservation.data.table_id,table.id,'se permite reservar para futuro la mesa que sigue ocupada');
+  const activeOnOriginal=db.prepare("SELECT id_comanda FROM Comanda WHERE id_mesa=? AND estado='En_Proceso'").get(table.id);
+  assert.ok(activeOnOriginal,'la mesa asignada continúa ocupada por su Comanda original');
+  const arrivedReassigned=await request(`/reservations/${occupiedReservation.data.id}/arrive`,jefe,'POST',{});
+  assert.equal(arrivedReassigned.status,200,arrivedReassigned.data.error);
+  assert.notEqual(arrivedReassigned.data.tableId,table.id,'la llegada se reasigna a una mesa diferente');
+  assert.match(arrivedReassigned.data.tableCode,/^M\d{2}$/,'la respuesta comunica el código de mesa efectivo');
+  assert.equal(db.prepare('SELECT estado FROM Reserva WHERE id_reserva=?').get(occupiedReservation.data.id).estado,'Arribo_Confirmado');
+  assert.equal(db.prepare('SELECT id_mesa FROM Reserva WHERE id_reserva=?').get(occupiedReservation.data.id).id_mesa,arrivedReassigned.data.tableId,'la reserva conserva la mesa donde se sentó el grupo');
+  assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=?').get(table.id).estado,'Ocupada','la mesa original no se altera');
+  assert.equal(db.prepare("SELECT id_comanda FROM Comanda WHERE id_mesa=? AND estado='En_Proceso'").get(table.id).id_comanda,activeOnOriginal.id_comanda,'la Comanda original permanece en su mesa');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM Comanda WHERE id_mesa=? AND estado='En_Proceso'").get(arrivedReassigned.data.tableId).n,1,'se crea exactamente una Comanda en la alternativa');
+
+  const noAlternativeReservation=await request('/reservations',jefe,'POST',{guestName:'Reserva sin alternativa',partySize:1,tableId:table.id,reservedFor:new Date(Date.now()+15*60*60_000).toISOString(),turno:'Noche'});
+  assert.equal(noAlternativeReservation.status,201,noAlternativeReservation.data.error);
+  const freeTables=db.prepare("SELECT id_mesa,estado,hora_apertura FROM Mesa WHERE estado='Libre'").all();
+  const blockingUser=db.prepare("SELECT id_usuario FROM Usuario WHERE identificador_acceso='jefe'").get().id_usuario;
+  const blockedAt=new Date().toISOString();
+  for(const freeTable of freeTables){
+    db.prepare("UPDATE Mesa SET estado='Ocupada',hora_apertura=? WHERE id_mesa=?").run(blockedAt,freeTable.id_mesa);
+    db.prepare('INSERT INTO Datos_Ocupacion_Mesa(id_mesa,id_usuario,cantidad_comensales,fecha_hora_apertura) VALUES(?,?,1,?)').run(freeTable.id_mesa,blockingUser,blockedAt);
+  }
+  const activeBeforeNoAlternative=db.prepare("SELECT COUNT(*) n FROM Comanda WHERE estado='En_Proceso'").get().n;
+  const noAlternative=await request(`/reservations/${noAlternativeReservation.data.id}/arrive`,jefe,'POST',{});
+  assert.equal(noAlternative.status,400,'no debe confirmar el arribo sin una mesa alternativa');
+  assert.match(noAlternative.data.error,/no hay otra mesa libre/i);
+  assert.equal(db.prepare('SELECT estado FROM Reserva WHERE id_reserva=?').get(noAlternativeReservation.data.id).estado,'Confirmada','el fallo deja la reserva pendiente');
+  assert.equal(db.prepare('SELECT id_mesa FROM Reserva WHERE id_reserva=?').get(noAlternativeReservation.data.id).id_mesa,table.id,'el fallo conserva la asignación original');
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM Comanda WHERE estado='En_Proceso'").get().n,activeBeforeNoAlternative,'el fallo no crea Comandas parciales');
+  for(const freeTable of freeTables){
+    db.prepare('DELETE FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').run(freeTable.id_mesa);
+    db.prepare('UPDATE Mesa SET estado=?,hora_apertura=? WHERE id_mesa=?').run(freeTable.estado,freeTable.hora_apertura,freeTable.id_mesa);
+  }
+  const cancelledNoAlternative=await request(`/reservations/${noAlternativeReservation.data.id}/cancel`,jefe,'POST',{});
+  assert.equal(cancelledNoAlternative.status,200,'la reserva fallida se puede cancelar tras restaurar el estado de prueba');
 
   const turno=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'America/Argentina/Buenos_Aires',hour:'2-digit',hourCycle:'h23'}).format(new Date()))<18?'Mediodía':'Noche';
   db.prepare(`UPDATE Mesa SET capacidad=2 WHERE id_mesa!=? AND NOT EXISTS(SELECT 1 FROM Comanda c WHERE c.id_mesa=Mesa.id_mesa AND c.estado='En_Proceso')`).run(table.id);
@@ -136,13 +173,14 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   const assigned=await request(`/waitlist/${w2.data.id}/assign`,jefe,'POST',{});
   assert.equal(assigned.status,200,assigned.data.error);assert.equal(assigned.data.status,'Confirmada');
   const countBeforeArrival=db.prepare("SELECT COUNT(*) n FROM Comanda WHERE estado='En_Proceso'").get().n;
-  assert.equal(countBeforeArrival,1,'asignar mesa no debe crear una comanda antes de confirmar llegada');
+  assert.equal(countBeforeArrival,2,'asignar mesa no debe crear una comanda antes de confirmar llegada');
   const arrived=await request(`/reservations/${w2.data.id}/arrive`,jefe,'POST',{});
   assert.equal(arrived.status,200,arrived.data.error);
-  assert.equal(db.prepare("SELECT COUNT(*) n FROM Comanda WHERE estado='En_Proceso'").get().n,2);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM Comanda WHERE estado='En_Proceso'").get().n,3);
 
   const cashierDetail=await request(`/cashier/orders/${sent.data.orderId}`,caja);
   assert.equal(cashierDetail.status,200,cashierDetail.data.error);
+  assert.equal(cashierDetail.data.find(item=>item.id===rows[0].id_detalle).nombre,db.prepare('SELECT nombre FROM Producto WHERE id_producto=1').get().nombre,'Caja devuelve el nombre principal del plato');
   assert.equal(cashierDetail.data.find(item=>item.id===rows[0].id_detalle).description,db.prepare('SELECT descripcion FROM Producto WHERE id_producto=1').get().descripcion,'Caja devuelve la descripción de cada plato');
 
   const cashierOrders=await request('/cashier/orders',caja);
@@ -160,10 +198,12 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=?').get(table.id).estado,'Libre');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').get(table.id).n,0,'Caja borra el registro de ocupación al liberar la mesa');
 
-  const cancellable=await request('/reservations',jefe,'POST',{guestName:'Reserva a anular',partySize:2,tableId:3,reservedFor:new Date(Date.now()+8*60*60_000).toISOString(),turno:'Noche'});
+  const cancelTable=(await request('/tables',mozo)).data.find(item=>item.status==='free');
+  assert.ok(cancelTable,'se requiere una mesa libre para probar la anulación');
+  const cancellable=await request('/reservations',jefe,'POST',{guestName:'Reserva a anular',partySize:2,tableId:cancelTable.id,reservedFor:new Date(Date.now()+24*60*60_000).toISOString(),turno:'Noche'});
   assert.equal(cancellable.status,201,cancellable.data.error);
   const cancelledReservation=await request(`/reservations/${cancellable.data.id}/cancel`,jefe,'POST',{});
-  assert.equal(cancelledReservation.status,200);assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=3').get().estado,'Libre');
+  assert.equal(cancelledReservation.status,200);assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=?').get(cancelTable.id).estado,'Libre');
   assert.ok(db.prepare("SELECT COUNT(*) n FROM Registro_Auditoria WHERE accion='Reserva anulada manualmente' AND identificador_entidad=?").get(String(cancellable.data.id)).n>0);
 
   const lateTable=6,managerId=db.prepare("SELECT id_usuario FROM Usuario WHERE identificador_acceso='jefe'").get().id_usuario;
