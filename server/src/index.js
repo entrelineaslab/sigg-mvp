@@ -28,6 +28,16 @@ if(hasTable('Detalle_Comanda')&&!db.prepare('PRAGMA table_info(Detalle_Comanda)'
 }
 const estadoMigration=await migrarEstadosDetalleComanda(db,dbPath);
 if(estadoMigration.migrated)console.warn(`Migración de estados de plato aplicada; respaldo ${path.basename(estadoMigration.backup)}`);
+db.exec(`CREATE TABLE IF NOT EXISTS Datos_Ocupacion_Mesa (
+  id_mesa INTEGER PRIMARY KEY REFERENCES Mesa(id_mesa),
+  id_usuario INTEGER NOT NULL REFERENCES Usuario(id_usuario),
+  cantidad_comensales INTEGER NOT NULL CHECK(cantidad_comensales BETWEEN 1 AND 4),
+  fecha_hora_apertura TEXT NOT NULL
+)`);
+db.exec(`INSERT OR IGNORE INTO Datos_Ocupacion_Mesa(id_mesa,id_usuario,cantidad_comensales,fecha_hora_apertura)
+  SELECT c.id_mesa,c.id_usuario,COALESCE(oc.cantidad_comensales,2),COALESCE(m.hora_apertura,c.fecha_hora)
+  FROM Comanda c JOIN Mesa m ON m.id_mesa=c.id_mesa
+  LEFT JOIN Datos_Operacion_Comanda oc ON oc.id_comanda=c.id_comanda WHERE c.estado='En_Proceso'`);
 const app=express();
 const httpServer=createServer(app);
 const io=new Server(httpServer,{cors:{origin:process.env.CLIENT_ORIGIN||'*'}});
@@ -73,6 +83,7 @@ const audit=(user,action,type,id,details={})=>db.prepare(`INSERT INTO Registro_A
   VALUES(?,?,?,?,?,?)`).run(user?.id||null,action,type,String(id),JSON.stringify(details),nowIso());
 const openComandaForMesa=db.prepare(`SELECT c.*,u.nombre,u.apellido FROM Comanda c JOIN Usuario u ON u.id_usuario=c.id_usuario
   WHERE c.id_mesa=? AND c.estado='En_Proceso'`);
+const ocupacionForMesa=db.prepare(`SELECT om.*,u.nombre,u.apellido FROM Datos_Ocupacion_Mesa om JOIN Usuario u ON u.id_usuario=om.id_usuario WHERE om.id_mesa=?`);
 
 function syncMesaStates(){
   const tables=db.prepare('SELECT * FROM Mesa ORDER BY numero').all();
@@ -81,11 +92,11 @@ function syncMesaStates(){
     ORDER BY fecha_hora_reserva`).all(`+${RESERVATION_PREBLOCK_MINUTES} minutes`);
   const setState=db.prepare('UPDATE Mesa SET estado=?,hora_apertura=? WHERE id_mesa=?');
   for(const mesa of tables){
-    const comanda=openComandaForMesa.get(mesa.id_mesa);
-    if(comanda){
-      const opened=comanda.fecha_hora||nowIso();
+    const comanda=openComandaForMesa.get(mesa.id_mesa),ocupacion=ocupacionForMesa.get(mesa.id_mesa);
+    if(comanda||ocupacion){
+      const opened=ocupacion?.fecha_hora_apertura||comanda?.fecha_hora||nowIso();
       const estado=evaluarEstadoPermanencia(opened,Date.now());
-      if(mesa.estado!==estado||!mesa.hora_apertura){
+      if(mesa.estado!==estado||mesa.hora_apertura!==opened){
         setState.run(estado,opened,mesa.id_mesa);
         if(estado==='Alerta_Permanencia'&&mesa.estado!==estado)emitCritical('tables:changed',{tableId:mesa.id_mesa,reason:'Alerta_Permanencia'});
       }
@@ -110,17 +121,22 @@ function mesaDto(mesa){
   return{
     id:mesa.id_mesa,numero:mesa.numero,code:`M${String(mesa.numero).padStart(2,'0')}`,
     capacity:mesa.capacidad,status:apiStatus[estado]||'free',estado,
-    order_id:mesa.id_comanda||null,party_size:mesa.cantidad_comensales_operativa||booking.party_size||null,
+    order_id:mesa.id_comanda||null,item_count:mesa.item_count||0,
+    party_size:mesa.cantidad_comensales_ocupacion||mesa.cantidad_comensales_operativa||booking.party_size||null,
     opened_at:mesa.hora_apertura||null,elapsed:mesa.hora_apertura?elapsedText(mesa.hora_apertura):null,
-    waiter_name:mesa.id_comanda?`${mesa.nombre||''} ${mesa.apellido||''}`.trim():null,
+    waiter_name:mesa.id_comanda?`${mesa.nombre||''} ${mesa.apellido||''}`.trim():mesa.nombre_ocupacion?`${mesa.nombre_ocupacion} ${mesa.apellido_ocupacion||''}`.trim():null,
     ...booking
   };
 }
 function createComanda({idMesa,idUsuario,cantidadComensales}){
+  const mesa=db.prepare('SELECT hora_apertura FROM Mesa WHERE id_mesa=?').get(idMesa);
+  const actual=ocupacionForMesa.get(idMesa),openedAt=actual?.fecha_hora_apertura||mesa?.hora_apertura||nowIso();
+  if(actual)db.prepare('UPDATE Datos_Ocupacion_Mesa SET cantidad_comensales=? WHERE id_mesa=?').run(cantidadComensales,idMesa);
+  else db.prepare(`INSERT INTO Datos_Ocupacion_Mesa(id_mesa,id_usuario,cantidad_comensales,fecha_hora_apertura) VALUES(?,?,?,?)`).run(idMesa,idUsuario,cantidadComensales,openedAt);
   const idComanda=db.prepare(`INSERT INTO Comanda(id_mesa,id_usuario,fecha_hora,estado) VALUES(?,?,?,'En_Proceso')`)
     .run(idMesa,idUsuario,nowIso()).lastInsertRowid;
   db.prepare('INSERT INTO Datos_Operacion_Comanda(id_comanda,cantidad_comensales) VALUES(?,?)').run(idComanda,cantidadComensales);
-  db.prepare(`UPDATE Mesa SET estado='Ocupada',hora_apertura=? WHERE id_mesa=?`).run(nowIso(),idMesa);
+  db.prepare(`UPDATE Mesa SET estado='Ocupada',hora_apertura=? WHERE id_mesa=?`).run(openedAt,idMesa);
   return idComanda;
 }
 
@@ -146,11 +162,15 @@ app.post('/api/auth/login',(req,res)=>{
 app.get('/api/tables',auth,allow(...rolePermissions.waiter),(_req,res)=>{
   syncMesaStates();
   const tables=db.prepare(`SELECT m.*,c.id_comanda,c.fecha_hora,u.nombre,u.apellido,oc.cantidad_comensales cantidad_comensales_operativa,
+      om.cantidad_comensales cantidad_comensales_ocupacion,uom.nombre nombre_ocupacion,uom.apellido apellido_ocupacion,
+      (SELECT COUNT(*) FROM Detalle_Comanda d WHERE d.id_comanda=c.id_comanda AND d.estado_elaboracion!='Cancelado') item_count,
       r.id_reserva,r.nombre_cliente,r.fecha_hora_reserva,r.cantidad_comensales
     FROM Mesa m
     LEFT JOIN Comanda c ON c.id_mesa=m.id_mesa AND c.estado='En_Proceso'
     LEFT JOIN Usuario u ON u.id_usuario=c.id_usuario
     LEFT JOIN Datos_Operacion_Comanda oc ON oc.id_comanda=c.id_comanda
+    LEFT JOIN Datos_Ocupacion_Mesa om ON om.id_mesa=m.id_mesa
+    LEFT JOIN Usuario uom ON uom.id_usuario=om.id_usuario
     LEFT JOIN Reserva r ON r.id_mesa=m.id_mesa AND r.estado='Confirmada'
       AND datetime(r.fecha_hora_reserva) BETWEEN datetime('now','-15 minutes') AND datetime('now',?)
     ORDER BY m.numero,r.fecha_hora_reserva`).all(`+${RESERVATION_PREBLOCK_MINUTES} minutes`);
@@ -161,18 +181,41 @@ app.post('/api/tables/open',auth,allow(...rolePermissions.waiter),(req,res)=>{
   const{tableId,partySize}=req.body||{};
   if(!Number.isInteger(tableId)||!validarCapacidadMesa(4,partySize))return res.status(400).json({error:'Mesa y comensales (1–4) son requeridos'});
   try{
-    const idComanda=db.transaction(()=>{
+    syncMesaStates();
+    const openedAt=db.transaction(()=>{
       const mesa=db.prepare('SELECT * FROM Mesa WHERE id_mesa=?').get(tableId);
       if(!mesa)throw new Error('Mesa inexistente');
       if(!validarCapacidadMesa(mesa.capacidad,partySize))throw new Error('La cantidad supera la capacidad de la mesa');
-      if(openComandaForMesa.get(tableId))throw new Error('La mesa ya tiene una comanda en proceso');
+      if(mesa.estado!=='Libre'||ocupacionForMesa.get(tableId)||openComandaForMesa.get(tableId))throw new Error('La mesa no está disponible');
       if(db.prepare(`SELECT 1 FROM Reserva WHERE id_mesa=? AND estado='Confirmada'
         AND datetime(fecha_hora_reserva) BETWEEN datetime('now','-15 minutes') AND datetime('now',?)`).get(tableId,`+${RESERVATION_PREBLOCK_MINUTES} minutes`))throw new Error('La mesa tiene una reserva vigente');
-      const id=createComanda({idMesa:tableId,idUsuario:req.user.id,cantidadComensales:partySize});
-      audit(req.user,'Comanda abierta','Mesa',tableId,{cantidad_comensales:partySize,id_comanda:id});
-      return id;
+      const stamp=nowIso();
+      db.prepare(`INSERT INTO Datos_Ocupacion_Mesa(id_mesa,id_usuario,cantidad_comensales,fecha_hora_apertura) VALUES(?,?,?,?)`).run(tableId,req.user.id,partySize,stamp);
+      db.prepare(`UPDATE Mesa SET estado='Ocupada',hora_apertura=? WHERE id_mesa=?`).run(stamp,tableId);
+      audit(req.user,'Mesa ocupada sin comanda','Mesa',tableId,{cantidad_comensales:partySize});
+      return stamp;
     })();
-    emit('tables:changed',{tableId});res.status(201).json({id:idComanda,id_comanda:idComanda,id_mesa:tableId,party_size:partySize});
+    emit('tables:changed',{tableId});res.status(201).json({id_mesa:tableId,party_size:partySize,opened_at:openedAt,order_id:null});
+  }catch(e){res.status(400).json({error:e.message})}
+});
+app.post('/api/tables/:tableId/release',auth,allow(...rolePermissions.waiter),(req,res)=>{
+  const tableId=Number(req.params.tableId);
+  try{
+    const released=db.transaction(()=>{
+      const mesa=db.prepare('SELECT * FROM Mesa WHERE id_mesa=?').get(tableId);
+      if(!mesa||!['Ocupada','Alerta_Permanencia'].includes(mesa.estado))throw new Error('La mesa no está ocupada');
+      const comanda=openComandaForMesa.get(tableId);
+      if(comanda){
+        const activeItems=db.prepare(`SELECT COUNT(*) n FROM Detalle_Comanda WHERE id_comanda=? AND estado_elaboracion!='Cancelado'`).get(comanda.id_comanda).n;
+        if(activeItems>0)throw new Error('No se puede liberar: la comanda tiene platos cargados. Gestioná la cuenta en Caja.');
+        db.prepare(`UPDATE Comanda SET estado='Cancelada' WHERE id_comanda=? AND estado='En_Proceso'`).run(comanda.id_comanda);
+      }
+      db.prepare('DELETE FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').run(tableId);
+      db.prepare(`UPDATE Mesa SET estado='Libre',hora_apertura=NULL WHERE id_mesa=?`).run(tableId);
+      audit(req.user,'Mesa liberada sin platos activos','Mesa',tableId,{id_comanda:comanda?.id_comanda||null});
+      return {tableId,orderId:comanda?.id_comanda||null};
+    })();
+    emit('tables:changed',{tableId});res.json({ok:true,mesaLiberada:true,...released});
   }catch(e){res.status(400).json({error:e.message})}
 });
 app.get('/api/menu',auth,allow(...rolePermissions.waiter,...rolePermissions.kitchen,...rolePermissions.cashier),(_req,res)=>res.json(db.prepare(`SELECT p.id_producto id,p.nombre AS name,p.descripcion,
@@ -190,9 +233,17 @@ app.post('/api/orders',auth,allow(...rolePermissions.waiter),(req,res)=>{
       const mesa=db.prepare('SELECT * FROM Mesa WHERE id_mesa=?').get(tableId);
       if(!mesa)throw new Error('Mesa inexistente');
       if(!validarCapacidadMesa(mesa.capacidad,partySize))throw new Error('La cantidad supera la capacidad de la mesa');
-      const comanda=openComandaForMesa.get(tableId);
-      if(!comanda)throw new Error('Primero hay que abrir la mesa');
-      db.prepare('UPDATE Datos_Operacion_Comanda SET cantidad_comensales=? WHERE id_comanda=?').run(partySize,comanda.id_comanda);
+      let comanda=openComandaForMesa.get(tableId);
+      if(!comanda){
+        const ocupacion=ocupacionForMesa.get(tableId);
+        if(!ocupacion||!['Ocupada','Alerta_Permanencia'].includes(mesa.estado))throw new Error('Primero hay que ocupar la mesa');
+        const id=createComanda({idMesa:tableId,idUsuario:req.user.id,cantidadComensales:partySize});
+        comanda=openComandaForMesa.get(tableId);
+        if(!comanda||comanda.id_comanda!==id)throw new Error('No se pudo crear la comanda');
+      }else{
+        db.prepare('UPDATE Datos_Operacion_Comanda SET cantidad_comensales=? WHERE id_comanda=?').run(partySize,comanda.id_comanda);
+        db.prepare('UPDATE Datos_Ocupacion_Mesa SET cantidad_comensales=? WHERE id_mesa=?').run(partySize,tableId);
+      }
       const sentAt=nowIso();
       const add=db.prepare(`INSERT INTO Detalle_Comanda(id_comanda,id_producto,cantidad,precio_unitario_historico,observaciones,fecha_hora_envio,estado_elaboracion)
         VALUES(?,?,?,?,?,?,'En_Preparacion')`);
@@ -280,7 +331,7 @@ app.get('/api/cashier/orders',auth,allow(...rolePermissions.cashier),(req,res)=>
 app.get('/api/cashier/orders/:id',auth,allow(...rolePermissions.cashier),(req,res)=>{
   const comanda=db.prepare(`SELECT id_comanda FROM Comanda WHERE id_comanda=? AND estado='En_Proceso'`).get(req.params.id);
   if(!comanda)return res.status(404).json({error:'Cuenta abierta no encontrada'});
-  const rows=db.prepare(`SELECT d.id_detalle id,p.nombre,d.cantidad quantity,
+  const rows=db.prepare(`SELECT d.id_detalle id,p.nombre,p.descripcion description,d.cantidad quantity,
     CAST(ROUND(d.precio_unitario_historico*100) AS INTEGER) unit_price_cents,d.estado_elaboracion
     FROM Detalle_Comanda d JOIN Producto p ON p.id_producto=d.id_producto
     WHERE d.id_comanda=? AND d.estado_elaboracion!='Cancelado' ORDER BY d.id_detalle`).all(comanda.id_comanda);
@@ -330,6 +381,7 @@ app.post('/api/payments/close',auth,allow(...rolePermissions.cashier),(req,res)=
       const closed=db.prepare(`UPDATE Comanda SET estado='Cobrada_Cerrada' WHERE id_comanda=? AND estado='En_Proceso'`).run(orderId);
       if(!closed.changes)throw new Error('La comanda cambió de estado en otra terminal');
       db.prepare(`UPDATE Mesa SET estado='Libre',hora_apertura=NULL WHERE id_mesa=?`).run(comanda.id_mesa);
+      db.prepare('DELETE FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').run(comanda.id_mesa);
       audit(req.user,'Transacción de cobro registrada','Comanda',orderId,{total:centsToAmount(totalCents),medio_pago:medioPago});
       return{orderId,totalCents,tableId:comanda.id_mesa};
     })();

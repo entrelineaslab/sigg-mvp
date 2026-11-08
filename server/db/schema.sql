@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS Mesa (
   )
 );
 
+-- Extensión operativa: permite sentar/liberar un grupo antes de que exista Comanda.
+CREATE TABLE IF NOT EXISTS Datos_Ocupacion_Mesa (
+  id_mesa INTEGER PRIMARY KEY REFERENCES Mesa(id_mesa),
+  id_usuario INTEGER NOT NULL REFERENCES Usuario(id_usuario),
+  cantidad_comensales INTEGER NOT NULL CHECK(cantidad_comensales BETWEEN 1 AND 4),
+  fecha_hora_apertura TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS Seccion_Producto (
   id_seccion INTEGER PRIMARY KEY,
   nombre TEXT NOT NULL UNIQUE CHECK(nombre IN ('Cocina Caliente','Cocina Fría','Postres','Bebidas'))
@@ -114,8 +122,7 @@ INSERT INTO Producto(id_producto,id_seccion,nombre,descripcion,precio) VALUES
 ON CONFLICT(id_producto) DO UPDATE SET
   id_seccion=excluded.id_seccion,
   nombre=excluded.nombre,
-  descripcion=excluded.descripcion,
-  precio=excluded.precio;
+  descripcion=excluded.descripcion;
 
 -- Tablas técnicas auxiliares (no agregan campos a las entidades del DER).
 CREATE TABLE IF NOT EXISTS Control_Acceso (

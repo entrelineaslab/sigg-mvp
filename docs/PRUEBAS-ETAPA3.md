@@ -1,6 +1,6 @@
 # Resultados de pruebas — Etapa 3
 
-**Fecha de ejecución:** 4 de noviembre de 2026, Sandbox de desarrollo.
+**Fecha de ejecución:** 7 de noviembre de 2026, Sandbox de desarrollo.
 
 ## Comandos ejecutados
 
@@ -19,7 +19,7 @@ npm run build --prefix client
 - Vite: compilación completada; 55 módulos transformados.
 - Las integraciones iniciaron API y SQLite en una carpeta temporal desechable y la eliminaron al terminar. No apuntaron a `server/db/entre-lineas.sqlite`.
 
-La cobertura inspecciona aforo, total monetario histórico, frontera de 40 minutos, transición `En_Preparacion → Entregado`, migración del estado antiguo `Pendiente` con conservación de datos y CHECK, permisos de Administrador/Mozo/Jefe/Cocina/Caja, persistencia del inicializador sin sobrescribir precio/PIN/bloqueos, idempotencia, timestamp y observaciones extensas, preparación/entrega, intervención del Jefe antes/después de 25 minutos, reserva futura, filtros fecha/turno, edición/anulación, FIFO por capacidad, llegada separada, método de pago obligatorio, rechazo sin cierre, anulación en Caja, cobro, liberación de mesa y monitor no-show/auditoría. Un cliente Socket.IO autenticado además confirma que el evento de `Alerta_Permanencia` se propaga a los tablets al superar el umbral.
+La cobertura inspecciona aforo, total monetario histórico, frontera de 40 minutos, transición `En_Preparacion → Entregado`, migración del estado antiguo `Pendiente` con conservación de datos y CHECK, permisos de Administrador/Mozo/Jefe/Cocina/Caja, persistencia del inicializador sin sobrescribir precio/PIN/bloqueos, idempotencia, timestamp y observaciones extensas, apertura con aforo elegido, mesa ocupada sin Comanda, liberación de una mesa sin platos, bloqueo de liberación con platos activos, creación diferida de Comanda al primer envío y descripciones de productos en Caja; además cubre preparación/entrega, intervención del Jefe antes/después de 25 minutos, reserva futura, filtros fecha/turno, edición/anulación, FIFO por capacidad, llegada separada, método de pago obligatorio, rechazo sin cierre, anulación en Caja, cobro y monitor no-show/auditoría. Un cliente Socket.IO autenticado confirma que el evento de `Alerta_Permanencia` se propaga a los tablets al superar el umbral.
 
 En una validación anterior, por separado de las pruebas automáticas, el comando de cambio de PIN se ejecutó en una pseudo-terminal contra otra SQLite temporal: comprobé la entrada oculta, confirmación doble, hash bcrypt, reseteo del control de acceso y creación del backup. La base de demostración no fue modificada.
 

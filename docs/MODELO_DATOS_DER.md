@@ -47,7 +47,7 @@ El hallazgo H2/H30 requiere medir edad y FIFO por **plato enviado**, no por aper
 
 ## Tablas auxiliares fuera de las nueve entidades
 
-`Control_Acceso` conserva bloqueo/habilitación; `Datos_Operacion_Comanda` conserva cantidad de comensales que necesita la interfaz; `Llave_Idempotencia` evita repetir envíos y `Registro_Auditoria` mantiene trazabilidad. No agregan campos a las entidades oficiales.
+`Control_Acceso` conserva bloqueo/habilitación; `Datos_Operacion_Comanda` conserva cantidad de comensales de una cuenta; `Datos_Ocupacion_Mesa` conserva responsable, cantidad y hora de apertura desde que se ocupa la mesa, incluso antes de que exista una Comanda; `Llave_Idempotencia` evita repetir envíos y `Registro_Auditoria` mantiene trazabilidad. No agregan campos a las entidades oficiales del DER.
 
 ## DDL y migración
 

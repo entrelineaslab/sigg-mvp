@@ -49,12 +49,12 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 
 ## 4. Salón y comanda
 
-1. El Mozo toca una mesa libre. La mesa se abre directamente con dos comensales por defecto; puede ajustar el número dentro del aforo desde la pantalla de comanda.
-2. Selecciona una sección de carta, agrega los productos, ajusta cantidad y escribe observaciones completas (incluidas alergias o instrucciones).
-3. Pulsa “Enviar a cocina (KDS)”. Cada línea se almacena en `Detalle_Comanda` con `precio_unitario_historico`, `observaciones`, `fecha_hora_envio` y `estado_elaboracion='En_Preparacion'`.
-4. La clave `Idempotency-Key` evita duplicar una comanda si el cliente reintenta. Ante una caída de red, el navegador conserva el envío en almacenamiento local y lo reintenta al reconectar; el encabezado muestra desconexión. Si el servidor rechaza un envío, la tarjeta de recuperación conserva el pedido, explica el motivo y ofrece “Reintentar” o “Descartar” (este último pide confirmación).
-5. Para una mesa ocupada, pulsa “Ver Comanda”: abre la comanda activa y los nuevos ítems se agregan a esa misma cuenta. Despacho permanece separado.
-6. Si los comensales se retiran antes de recibir algún plato, la comanda solo puede cancelarse si todavía no se entregó ningún ítem. Al cancelar la comanda, los ítems que permanezcan en "En_Preparacion" pasan a "Cancelado" y la mesa vuelve a "Libre". Si existe al menos un ítem "Entregado", la comanda no puede cancelarse y debe continuar hasta el cobro.
+1. El Mozo toca una mesa libre y confirma en el modal la cantidad real de comensales (entre 1 y la capacidad de esa mesa). Aunque dos aparezca preseleccionado cuando el aforo lo permite, hay que confirmar explícitamente antes de abrir.
+2. La mesa queda ocupada y aparece como “sin comanda”. Si el grupo se retira sin pedir, vuelve al Salón y pulsa “Liberar mesa”; no se genera ninguna Comanda.
+3. Para cargar un pedido, pulsa “Iniciar comanda” en la mesa ocupada. Selecciona una sección de carta, agrega los productos, ajusta cantidades y escribe observaciones completas (incluidas alergias o instrucciones).
+4. Pulsa “Enviar a cocina (KDS)”. Ese primer envío crea la Comanda y cada línea se guarda en `Detalle_Comanda` con `precio_unitario_historico`, `observaciones`, `fecha_hora_envio` y `estado_elaboracion='En_Preparacion'`.
+5. La clave `Idempotency-Key` evita duplicar un pedido si el cliente reintenta. Ante una caída de red, el navegador conserva el envío en almacenamiento local y lo reintenta al reconectar. En mesas con Comanda activa, “Ver comanda” abre la cuenta existente; los nuevos ítems se agregan allí. Despacho permanece separado.
+6. “Liberar mesa” solo está disponible si no quedan platos activos; el servidor también valida esta regla. Si ya hay platos en preparación o entregados, no se libera desde Salón: la cuenta debe resolverse en Caja.
 
 ## 5. Cocina y entrega a la mesa
 
