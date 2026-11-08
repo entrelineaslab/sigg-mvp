@@ -120,13 +120,22 @@ export function registerReservationRoutes({app,db,auth,managerAuth,emit,emitCrit
       const output=db.transaction(()=>{
         const r=db.prepare(`SELECT * FROM Reserva WHERE id_reserva=? AND estado='Confirmada'`).get(req.params.id);
         if(!r)throw new Error('Reserva no pendiente');
-        const mesa=db.prepare('SELECT * FROM Mesa WHERE id_mesa=?').get(r.id_mesa);
-        if(!mesa||openComandaForMesa.get(mesa.id_mesa))throw new Error('La mesa reservada ya está ocupada');
-        const changed=db.prepare(`UPDATE Reserva SET estado='Arribo_Confirmado' WHERE id_reserva=? AND estado='Confirmada'`).run(r.id_reserva);
+        let mesa=db.prepare('SELECT * FROM Mesa WHERE id_mesa=?').get(r.id_mesa);
+        if(!mesa)throw new Error('La mesa reservada ya no existe; reasigne la reserva antes de confirmar la llegada');
+        if(openComandaForMesa.get(mesa.id_mesa)||db.prepare('SELECT 1 FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').get(mesa.id_mesa)){
+          mesa=db.prepare(`SELECT m.* FROM Mesa m WHERE m.capacidad>=? AND m.id_mesa!=? AND m.estado='Libre'
+            AND NOT EXISTS(SELECT 1 FROM Comanda c WHERE c.id_mesa=m.id_mesa AND c.estado='En_Proceso')
+            AND NOT EXISTS(SELECT 1 FROM Datos_Ocupacion_Mesa o WHERE o.id_mesa=m.id_mesa)
+            AND NOT EXISTS(SELECT 1 FROM Reserva x WHERE x.id_mesa=m.id_mesa AND x.estado='Confirmada' AND x.id_reserva!=?
+              AND datetime(x.fecha_hora_reserva) BETWEEN datetime(?,'-${CONFLICT_MINUTES} minutes') AND datetime(?,'+${CONFLICT_MINUTES} minutes'))
+            ORDER BY m.capacidad,m.numero LIMIT 1`).get(r.cantidad_comensales,mesa.id_mesa,r.id_reserva,r.fecha_hora_reserva,r.fecha_hora_reserva);
+          if(!mesa)throw new Error('La mesa reservada está ocupada y no hay otra mesa libre con capacidad suficiente; libere una mesa o edite/reasigne la reserva e intente de nuevo');
+        }
+        const changed=db.prepare(`UPDATE Reserva SET id_mesa=?,estado='Arribo_Confirmado' WHERE id_reserva=? AND estado='Confirmada'`).run(mesa.id_mesa,r.id_reserva);
         if(!changed.changes)throw new Error('La reserva cambió en otra terminal');
         const idComanda=createComanda({idMesa:mesa.id_mesa,idUsuario:req.user.id,cantidadComensales:r.cantidad_comensales});
-        audit(req.user,'Arribo de reserva confirmado','Reserva',r.id_reserva,{id_mesa:mesa.id_mesa,id_comanda:idComanda});
-        return{tableId:mesa.id_mesa,orderId:idComanda};
+        audit(req.user,'Arribo de reserva confirmado','Reserva',r.id_reserva,{id_mesa:mesa.id_mesa,id_mesa_reservada:r.id_mesa,id_comanda:idComanda});
+        return{tableId:mesa.id_mesa,tableCode:`M${String(mesa.numero).padStart(2,'0')}`,orderId:idComanda};
       })();
       emitChanged(Number(req.params.id),output.tableId);
       res.json({ok:true,status:'Arribo_Confirmado',...output});

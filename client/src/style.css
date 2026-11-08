@@ -459,6 +459,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .open-table-error{width:min(440px,100%);margin:14px auto 0;padding:10px 12px;border:1px solid #efc4c5;border-radius:7px;background:var(--red-light);color:#9d2530;font-size:12px}
 .release-table-btn{width:100%;min-height:44px;margin-top:8px;padding:8px;border:1px solid #f0c4b4;border-radius:7px;background:#fff7f4;color:#a43f31;font-size:11px;font-weight:800}
 .release-table-btn:hover{border-color:#d99075;background:#fff0e8}
-.bill-item-name{display:block;color:#28364a;font-size:12px}
+.bill-item-name{display:block;color:#28364a;font-size:12px;text-align:left}
 .bill-description{display:block!important;margin:4px 0;color:#697789!important;font-size:10px!important;font-weight:400;line-height:1.4}
 @media(max-width:560px){.dialog.open-dialog{padding:0 16px 18px}.open-dialog-header{margin:0 -16px 16px;padding:15px 16px}.open-dialog-header h2{font-size:18px}.party-picker{gap:7px}.party-picker button{height:62px;font-size:24px}.open-dialog .dialog-actions{gap:8px;margin-top:20px}.open-dialog .dialog-actions button{font-size:11px}.bill-description{font-size:9px!important}}
+.cash-layout .bill-row > span:first-child > .bill-item-name {
+  text-align: left;
+}
