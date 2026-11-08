@@ -61,22 +61,38 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.equal((await request('/kds',jefe)).status,403,'Jefe no accede al KDS general');
   assert.equal((await request('/kds',cocina)).status,200,'Cocina sí consulta el KDS read-only');
 
-  const tables=(await request('/tables',mozo)).data,table=tables.find(item=>item.status==='free');
-  const opened=await request('/tables/open',mozo,'POST',{tableId:table.id,partySize:2});
-  assert.equal(opened.status,201,opened.data.error);
+  const tables=(await request('/tables',mozo)).data,table=tables.find(item=>item.status==='free'),emptyTable=tables.find(item=>item.status==='free'&&item.id!==table.id);
+  const db=new Database(dbPath),initialComandas=db.prepare('SELECT COUNT(*) n FROM Comanda').get().n;
+  const occupiedWithoutOrder=await request('/tables/open',mozo,'POST',{tableId:emptyTable.id,partySize:1});
+  assert.equal(occupiedWithoutOrder.status,201,occupiedWithoutOrder.data.error);
+  const emptyState=(await request('/tables',mozo)).data.find(item=>item.id===emptyTable.id);
+  assert.equal(emptyState.status,'occupied');assert.equal(emptyState.party_size,1);assert.equal(emptyState.order_id,null);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM Comanda').get().n,initialComandas,'ocupar mesa no debe crear Comanda');
+  const released=await request(`/tables/${emptyTable.id}/release`,mozo,'POST',{});
+  assert.equal(released.status,200,released.data.error);assert.equal(released.data.mesaLiberada,true);
+  assert.equal((await request('/tables',mozo)).data.find(item=>item.id===emptyTable.id).status,'free');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM Comanda').get().n,initialComandas,'liberar una mesa vacía no crea ni cancela Comandas inexistentes');
+
+  const opened=await request('/tables/open',mozo,'POST',{tableId:table.id,partySize:3});
+  assert.equal(opened.status,201,opened.data.error);assert.equal(opened.data.party_size,3);
+  const occupiedState=(await request('/tables',mozo)).data.find(item=>item.id===table.id);
+  assert.equal(occupiedState.party_size,3);assert.equal(occupiedState.order_id,null);
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM Comanda').get().n,initialComandas,'la apertura deja la creación de Comanda para el primer pedido real');
   const key=`integration-${Date.now()}`,notes='Alergia e indicación culinaria '.repeat(25);
-  const orderBody={tableId:table.id,partySize:2,items:[{menuItemId:1,quantity:1,notes},{menuItemId:2,quantity:1,notes:''}]};
+  const orderBody={tableId:table.id,partySize:3,items:[{menuItemId:1,quantity:1,notes},{menuItemId:2,quantity:1,notes:''}]};
   const sent=await request('/orders',mozo,'POST',orderBody,{'Idempotency-Key':key});
   assert.equal(sent.status,201,sent.data.error);
   const replay=await request('/orders',mozo,'POST',orderBody,{'Idempotency-Key':key});
   assert.equal(replay.status,200);
   assert.equal(replay.data.orderId,sent.data.orderId);
-  const db=new Database(dbPath);
   const rows=db.prepare('SELECT * FROM Detalle_Comanda WHERE id_comanda=? ORDER BY id_detalle').all(sent.data.orderId);
   assert.equal(rows.length,2,'el reintento no debe duplicar ítems');
   assert.equal(rows[0].observaciones,notes,'observaciones completas, sin recorte');
   assert.ok(rows[0].fecha_hora_envio,'fecha_hora_envio debe persistirse por ítem');
   assert.deepEqual(rows.map(row=>row.estado_elaboracion),['En_Preparacion','En_Preparacion'],'cada plato inicia directamente En_Preparacion');
+  assert.equal(db.prepare('SELECT cantidad_comensales FROM Datos_Operacion_Comanda WHERE id_comanda=?').get(sent.data.orderId).cantidad_comensales,3,'la cantidad confirmada al abrir se conserva en la Comanda');
+  const blockedRelease=await request(`/tables/${table.id}/release`,mozo,'POST',{});
+  assert.equal(blockedRelease.status,400,'no se libera una mesa si ya tiene platos activos');
 
   const first=rows[0],second=rows[1];
   const removedState=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'queued'});
@@ -125,6 +141,10 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.equal(arrived.status,200,arrived.data.error);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM Comanda WHERE estado='En_Proceso'").get().n,2);
 
+  const cashierDetail=await request(`/cashier/orders/${sent.data.orderId}`,caja);
+  assert.equal(cashierDetail.status,200,cashierDetail.data.error);
+  assert.equal(cashierDetail.data.find(item=>item.id===rows[0].id_detalle).description,db.prepare('SELECT descripcion FROM Producto WHERE id_producto=1').get().descripcion,'Caja devuelve la descripción de cada plato');
+
   const cashierOrders=await request('/cashier/orders',caja);
   const firstOrder=cashierOrders.data.find(item=>item.id===sent.data.orderId);
   assert.ok(firstOrder);
@@ -138,6 +158,7 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   const closed=await request('/payments/close',caja,'POST',{orderId:firstOrder.id,payments:[{method:'cash',amountCents:firstOrder.total_cents}]});
   assert.equal(closed.status,200,closed.data.error);
   assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=?').get(table.id).estado,'Libre');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').get(table.id).n,0,'Caja borra el registro de ocupación al liberar la mesa');
 
   const cancellable=await request('/reservations',jefe,'POST',{guestName:'Reserva a anular',partySize:2,tableId:3,reservedFor:new Date(Date.now()+8*60*60_000).toISOString(),turno:'Noche'});
   assert.equal(cancellable.status,201,cancellable.data.error);
@@ -180,6 +201,7 @@ test('H14: la alerta de permanencia se propaga a tablets por Socket.IO al supera
     const alertEvent=new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('La transición a Alerta_Permanencia no se propagó')),2500);socket.on('tables:changed',(payload,ack)=>{ack?.({received:true});if(payload?.tableId===table.id&&payload?.reason==='Alerta_Permanencia'){clearTimeout(timer);resolve(payload)}})});
     const dbPathLocal=dbPath;db=new Database(dbPathLocal);const openedAt=new Date(Date.now()-40*60_000-5).toISOString();
     db.prepare('UPDATE Comanda SET fecha_hora=? WHERE id_comanda=?').run(openedAt,sent.data.orderId);
+    db.prepare('UPDATE Datos_Ocupacion_Mesa SET fecha_hora_apertura=? WHERE id_mesa=?').run(openedAt,table.id);
     db.prepare("UPDATE Mesa SET estado='Ocupada',hora_apertura=? WHERE id_mesa=?").run(openedAt,table.id);
     const event=await alertEvent;assert.equal(event.reason,'Alerta_Permanencia');
     const updated=(await request('/tables',mozo)).data.find(item=>item.id===table.id);assert.equal(updated.status,'alert');

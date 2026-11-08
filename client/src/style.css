@@ -436,3 +436,29 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .admin-footer-state i{width:7px;height:7px;box-shadow:none}
 @media(max-width:700px){.brand-lockup.mini .brand-logo{width:116px;height:42px}.brand-lockup.mini>small{display:none}.admin-workspace{padding:23px 14px 30px}.admin-feature{grid-template-columns:1fr}.admin-feature-aside{min-height:270px}.admin-feature-copy{padding:25px 20px}.admin-auth-tag{font-size:0;gap:0}.admin-auth-tag i{width:9px;height:9px}.admin-role-chip{font-size:8px;padding:7px 8px}.admin-footer{align-items:flex-start}.admin-footer-state{font-size:0}.admin-footer-state i{margin-top:4px}}
 @media(max-width:400px){.admin-header{padding-inline:10px}.admin-workspace .page-heading{gap:8px;flex-direction:column}.admin-workspace .user-tag{display:none}.admin-feature-copy>p{font-size:13px}}
+
+/* Confirmación previa de aforo al abrir una mesa y liberación sin comanda. */
+.dialog.open-dialog{width:min(560px,96vw);padding:0 24px 26px;overflow:hidden}
+.open-dialog-header{display:flex;align-items:center;justify-content:space-between;margin:0 -24px 20px;padding:17px 24px;background:var(--navy);color:#fff}
+.open-dialog-header h2{margin:0;color:#fff;font-size:21px}
+.open-dialog-header .dialog-x{position:static;color:#fff;font-size:28px;line-height:1}
+.open-dialog-header .dialog-x:hover{color:#ffd7c8}
+.open-dialog .capacity-note{margin:0;padding:10px 12px;border-radius:7px;font-weight:700}
+.party-prompt{margin:21px 0 14px;text-align:center;color:#303b49;font-size:15px}
+.party-picker{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;width:min(440px,100%);margin:0 auto 22px}
+.party-picker button{height:82px;border:2px solid #d9e0e8;border-radius:11px;background:#f8fafc;color:#222b36;font-size:29px;font-weight:800}
+.party-picker button.selected{border-color:var(--blue);background:var(--blue-light);color:var(--navy);box-shadow:0 0 0 2px #0866a51c}
+.open-waiter{display:grid;gap:7px;width:min(440px,100%);margin:0 auto;color:#586779;font-size:12px;font-weight:800}
+.open-waiter input{height:46px;padding:0 13px;border:1px solid #d6dde6;border-radius:8px;background:#fff;color:#354255;font-size:13px;font-weight:500}
+.open-dialog .dialog-actions{display:grid;grid-template-columns:1fr 1.15fr;gap:12px;width:min(440px,100%);margin:26px auto 0}
+.open-dialog .dialog-actions button{min-height:48px;border-radius:8px;font-size:13px;font-weight:800}
+.open-dialog .cancel-open{border:0;background:#f0f2f5;color:#596575}
+.open-dialog .cancel-open:hover{background:#e4e8ed}
+.open-dialog .dialog-actions .primary{background:var(--green)}
+.open-dialog .dialog-actions .primary:hover{background:#256b32}
+.open-table-error{width:min(440px,100%);margin:14px auto 0;padding:10px 12px;border:1px solid #efc4c5;border-radius:7px;background:var(--red-light);color:#9d2530;font-size:12px}
+.release-table-btn{width:100%;min-height:44px;margin-top:8px;padding:8px;border:1px solid #f0c4b4;border-radius:7px;background:#fff7f4;color:#a43f31;font-size:11px;font-weight:800}
+.release-table-btn:hover{border-color:#d99075;background:#fff0e8}
+.bill-item-name{display:block;color:#28364a;font-size:12px}
+.bill-description{display:block!important;margin:4px 0;color:#697789!important;font-size:10px!important;font-weight:400;line-height:1.4}
+@media(max-width:560px){.dialog.open-dialog{padding:0 16px 18px}.open-dialog-header{margin:0 -16px 16px;padding:15px 16px}.open-dialog-header h2{font-size:18px}.party-picker{gap:7px}.party-picker button{height:62px;font-size:24px}.open-dialog .dialog-actions{gap:8px;margin-top:20px}.open-dialog .dialog-actions button{font-size:11px}.bill-description{font-size:9px!important}}
