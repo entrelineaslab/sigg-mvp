@@ -1,13 +1,36 @@
-# Entre Líneas Lab — Gastro POS local
+# SIGG — Sistema Integral de Gestión Gastronómica
+### Entre Líneas Lab — Gastro POS Local (Etapa 3: MVP Funcional)
 
-MVP de operación gastronómica para tablets y servidor local. Alineado a las pantallas Figma, al DER en español y a los hallazgos de Etapa 3. Incluye Salón, Comanda, Reservas/Espera, KDS, Despacho y Caja.
+> **Instituto de Formación Técnica Superior N° 29**  
+> **Carrera:** Tecnicatura Superior en Desarrollo de Software  
+> **Cátedra:** Práctica Profesionalizante IV (2026)  
+> **Docentes:** Prof. Lic. Emir Eliezer García Ontiveros | Prof. Lic. Kevin Del Bello  
+> **Equipo de Desarrollo:** Guillermina Zen Cáffaro, Walter David Ciancio, Sergio de los Santos, Mario Julio Alegre.  
+> **Cliente Didáctico:** Restaurante Didáctico IFTS N° 34  
+
+Plataforma cliente-servidor distribuida en red local (LAN/WLAN) diseñada para digitalizar integralmente el circuito transaccional del restaurante: Salón y Mesas, Comandeo táctil en 4 partidas, Cocina (KDS pasivo manos libres), Reservas con lista de espera FIFO y Estación de Caja con auditoría transaccional. Alineado al diseño de pantallas en Figma, al DER oficial en español y a los requerimientos de la Etapa 3.
+
+---
+
+## Recursos, Diseño y Documentación del Proyecto
+
+- **Prototipo Interactivo (Figma):** [Ver prototipo navegable oficial](https://www.figma.com/proto/phlhkr4tOWqRIyoVCAnffW/Entre-L%C3%ADneas-Lab?node-id=6-46&viewport=433%2C2106%2C0.68&t=6yA6hJUiQvXXtswc-1&scaling=min-zoom&content-scaling=fixed&starting-point-node-id=1%3A162&page-id=0%3A1)
+- **Documentación y Entregables (Google Drive):** [Carpeta general del proyecto](https://drive.google.com/drive/folders/1HlfdtsXKSsmF5yaqBUO7ZzY-qhdZzXNy?usp=drive_link)
+- **Diagramas de Arquitectura y DER:** [Carpeta de diagramas del sistema](https://drive.google.com/drive/folders/1JBIJRaWXneaofTXialPZsvUxBRmQZk6G?usp=drive_link)
+- **Registro de Requerimientos y Backlog (Fase 2):** [Documento de alcance futuro y backlog](https://docs.google.com/document/d/1Bjt1Cgpag7BwMwsdiufky28izSmH-ERmfzJvqN31l2U/edit?usp=sharing)
+- **Presentación Ejecutiva:** [Diapositivas del proyecto en Canva](https://canva.link/ptjr4c5r56bw6ks)
+- **Guías de Puesta en Marcha:**
+  * [Guía paso a paso para evaluación](docs/GUIA-PASO-A-PASO.md)
+  * [Informe de resultados de pruebas](docs/PRUEBAS-ETAPA3.md)
+
+---
 
 ## Inicio rápido
 
 Clona el repositorio y entra a la carpeta:
 
 ```bash
-git clone https://github.com/entrelineaslab/sigg-mvp.git
+git clone [https://github.com/entrelineaslab/sigg-mvp.git](https://github.com/entrelineaslab/sigg-mvp.git)
 cd sigg-mvp
 ```
 
