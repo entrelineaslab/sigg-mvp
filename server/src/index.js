@@ -164,6 +164,7 @@ app.get('/api/tables',auth,allow(...rolePermissions.waiter),(_req,res)=>{
   const tables=db.prepare(`SELECT m.*,c.id_comanda,c.fecha_hora,u.nombre,u.apellido,oc.cantidad_comensales cantidad_comensales_operativa,
       om.cantidad_comensales cantidad_comensales_ocupacion,uom.nombre nombre_ocupacion,uom.apellido apellido_ocupacion,
       (SELECT COUNT(*) FROM Detalle_Comanda d WHERE d.id_comanda=c.id_comanda AND d.estado_elaboracion!='Cancelado') item_count,
+      (SELECT COUNT(*) FROM Detalle_Comanda d WHERE d.id_comanda=c.id_comanda AND d.estado_elaboracion='Entregado') delivered_count,
       r.id_reserva,r.nombre_cliente,r.fecha_hora_reserva,r.cantidad_comensales
     FROM Mesa m
     LEFT JOIN Comanda c ON c.id_mesa=m.id_mesa AND c.estado='En_Proceso'
@@ -206,16 +207,19 @@ app.post('/api/tables/:tableId/release',auth,allow(...rolePermissions.waiter),(r
       if(!mesa||!['Ocupada','Alerta_Permanencia'].includes(mesa.estado))throw new Error('La mesa no está ocupada');
       const comanda=openComandaForMesa.get(tableId);
       if(comanda){
-        const activeItems=db.prepare(`SELECT COUNT(*) n FROM Detalle_Comanda WHERE id_comanda=? AND estado_elaboracion!='Cancelado'`).get(comanda.id_comanda).n;
-        if(activeItems>0)throw new Error('No se puede liberar: la comanda tiene platos cargados. Gestioná la cuenta en Caja.');
+        const deliveredItems=db.prepare(`SELECT COUNT(*) n FROM Detalle_Comanda WHERE id_comanda=? AND estado_elaboracion='Entregado'`).get(comanda.id_comanda).n;
+        if(deliveredItems>0)throw new Error('No se puede cancelar la comanda ni liberar la mesa: ya hay platos entregados. Gestioná la cuenta en Caja.');
+        db.prepare(`UPDATE Detalle_Comanda SET estado_elaboracion='Cancelado' WHERE id_comanda=? AND estado_elaboracion='En_Preparacion'`).run(comanda.id_comanda);
         db.prepare(`UPDATE Comanda SET estado='Cancelada' WHERE id_comanda=? AND estado='En_Proceso'`).run(comanda.id_comanda);
       }
       db.prepare('DELETE FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').run(tableId);
       db.prepare(`UPDATE Mesa SET estado='Libre',hora_apertura=NULL WHERE id_mesa=?`).run(tableId);
-      audit(req.user,'Mesa liberada sin platos activos','Mesa',tableId,{id_comanda:comanda?.id_comanda||null});
+      audit(req.user,comanda?'Comanda cancelada y mesa liberada':'Mesa liberada sin comanda','Mesa',tableId,{id_comanda:comanda?.id_comanda||null,platos_cancelados:Boolean(comanda)});
       return {tableId,orderId:comanda?.id_comanda||null};
     })();
-    emit('tables:changed',{tableId});res.json({ok:true,mesaLiberada:true,...released});
+    emit('tables:changed',{tableId});
+    if(released.orderId)emit('kds:changed',{orderId:released.orderId,status:'cancelled'});
+    res.json({ok:true,mesaLiberada:true,...released});
   }catch(e){res.status(400).json({error:e.message})}
 });
 app.get('/api/menu',auth,allow(...rolePermissions.waiter,...rolePermissions.kitchen,...rolePermissions.cashier),(_req,res)=>res.json(db.prepare(`SELECT p.id_producto id,p.nombre AS name,p.descripcion,

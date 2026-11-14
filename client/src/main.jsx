@@ -65,6 +65,11 @@ function App(){
   const[serviceDate,setServiceDate]=useState(todayArgentina),[turno,setTurno]=useState(defaultTurno);
   const openingRef=useRef(new Set());
   const token=session?.token,user=session?.user;
+  useEffect(()=>{
+    if(!toast)return;
+    const timer=window.setTimeout(()=>setToast(''),5000);
+    return()=>window.clearTimeout(timer);
+  },[toast]);
   const reportQueueResult=result=>{if(result.sent){setToast(`${result.sent} comanda(s) transmitida(s) tras reconexión`);refresh()}if(result.blocked.length)setQueueProblem(result.blocked[0]);else if(result.sent)setQueueProblem(null)};
   const roles=useMemo(()=>user?.role==='salon_manager'?['salon','comanda','reservas','despacho']:user?.role==='waiter'?['salon','comanda','despacho']:user?.role==='kitchen'?['kds']:user?.role==='cashier'?['caja']:[],[user]);
   const filters=`?fecha=${encodeURIComponent(serviceDate)}&turno=${encodeURIComponent(turno)}`;
@@ -119,8 +124,10 @@ function App(){
     }catch(e){setError(e.message)}finally{openingRef.current.delete(table.id);setOpening(null)}
   }
   async function releaseTable(table){
-    if(!window.confirm(`¿Liberar la Mesa ${String(table.numero||table.id).padStart(2,'0')}? Solo se permite si no tiene platos activos.`))return;
-    try{await api(`/tables/${table.id}/release`,token,{method:'POST'});setToast('Mesa liberada correctamente');if(selectedTable?.id===table.id)setSelectedTable(null);setView('salon');await refresh()}
+    const mesa=String(table.numero||table.id).padStart(2,'0'),hasOrder=Boolean(table.order_id);
+    const prompt=hasOrder?`¿Cancelar la comanda de la Mesa ${mesa}? Todos los platos En_Preparacion pasarán a Cancelado y se liberará la mesa. Esta acción no se puede deshacer.`:`¿Liberar la Mesa ${mesa} sin comanda?`;
+    if(!window.confirm(prompt))return;
+    try{await api(`/tables/${table.id}/release`,token,{method:'POST'});setToast(hasOrder?'Comanda cancelada y mesa liberada':'Mesa liberada correctamente');if(selectedTable?.id===table.id)setSelectedTable(null);setView('salon');await refresh()}
     catch(e){setError(e.message)}
   }
   async function tableAction(table){
@@ -157,7 +164,7 @@ function TableCard({table:t,onAction,onRelease,canConfirm,busy}){
   const names={free:'Libre',occupied:'Ocupada',alert:'Alerta permanencia',reserved:'Reservada',alert_reservation:'Alerta de reserva'};
   const isReservation=['reserved','alert_reservation'].includes(state),isOccupied=['occupied','alert'].includes(state);
   const actionLabel=state==='free'?'+ Abrir mesa':isReservation?(canConfirm?'Confirmar ingreso':'Ingreso reservado · Jefe de Salón'):state==='alert'&&t.order_id?'Gestionar cuenta':t.order_id?'Ver comanda':'Iniciar comanda';
-  return <article className={`table-tile ${stateClass}`}><div className="tile-status"><b>{names[state]}</b>{t.elapsed&&<span>{t.elapsed}</span>}{isReservation&&t.reserved_for&&<span>{new Date(t.reserved_for).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span>}</div><div className="tile-number">{String(t.numero||t.id).padStart(2,'0')}</div>{isReservation?<p className="tile-info">{canConfirm?t.guest_name||'Reserva':'Reserva confirmada'} · {t.party_size||1} personas</p>:isOccupied?<p className="tile-info">♙ {t.party_size||t.capacity} comensales{t.order_id?' · con comanda':' · sin comanda'}</p>:<p className="tile-info">Capacidad: {t.capacity} plazas</p>}{state==='alert'&&<p className="alert-hint">⚠ Superó 40 min</p>}{state==='alert_reservation'&&<p className="alert-hint">⚠ Demora de 10 a 15 min</p>}<button disabled={busy||isReservation&&!canConfirm} onClick={onAction} className="tile-action">{busy?'Abriendo…':actionLabel}</button>{isOccupied&&Number(t.item_count||0)===0&&<button disabled={busy} onClick={onRelease} className="release-table-btn">Liberar mesa</button>}</article>;
+  return <article className={`table-tile ${stateClass}`}><div className="tile-status"><b>{names[state]}</b>{t.elapsed&&<span>{t.elapsed}</span>}{isReservation&&t.reserved_for&&<span>{new Date(t.reserved_for).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span>}</div><div className="tile-number">{String(t.numero||t.id).padStart(2,'0')}</div>{isReservation?<p className="tile-info">{canConfirm?t.guest_name||'Reserva':'Reserva confirmada'} · {t.party_size||1} personas</p>:isOccupied?<p className="tile-info">♙ {t.party_size||t.capacity} comensales{t.order_id?' · con comanda':' · sin comanda'}</p>:<p className="tile-info">Capacidad: {t.capacity} plazas</p>}{state==='alert'&&<p className="alert-hint">⚠ Superó 40 min</p>}{state==='alert_reservation'&&<p className="alert-hint">⚠ Demora de 10 a 15 min</p>}<button disabled={busy||isReservation&&!canConfirm} onClick={onAction} className="tile-action">{busy?'Abriendo…':actionLabel}</button>{isOccupied&&Number(t.delivered_count||0)===0&&<button disabled={busy} onClick={onRelease} className="release-table-btn">{t.order_id?'Cancelar comanda y liberar mesa':'Liberar mesa'}</button>}</article>;
 }
 
 function OrderScreen({table,menu,token,username,onBack,onSent,setError,setToast}){
