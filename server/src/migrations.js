@@ -12,6 +12,45 @@ const detailTableSql = `CREATE TABLE Detalle_Comanda_nuevo (
     CHECK(estado_elaboracion IN ('En_Preparacion','Entregado','Cancelado'))
 )`;
 
+const comandaTableSql = `CREATE TABLE Comanda_nueva (
+  id_comanda INTEGER PRIMARY KEY,
+  id_mesa INTEGER NOT NULL REFERENCES Mesa(id_mesa),
+  id_usuario INTEGER NOT NULL REFERENCES Usuario(id_usuario),
+  fecha_hora TEXT NOT NULL DEFAULT (datetime('now')),
+  estado TEXT NOT NULL DEFAULT 'En_Proceso' CHECK(estado IN ('En_Proceso','Cobrada_Cerrada','Cancelada'))
+)`;
+
+/** Rebuild an existing Comanda table whose CHECK predates the Cancelada state. */
+export async function migrarEstadosComanda(db, dbPath) {
+  const table=db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='Comanda'").get();
+  if(!table)return {migrated:false,backup:null};
+  if(/'Cancelada'/.test(table.sql||''))return {migrated:false,backup:null};
+  const invalid=db.prepare("SELECT DISTINCT estado FROM Comanda WHERE estado NOT IN ('En_Proceso','Cobrada_Cerrada','Cancelada')").all();
+  if(invalid.length)throw new Error(`Estados desconocidos en Comanda: ${invalid.map(row=>row.estado).join(', ')}`);
+  const backup=`${path.resolve(dbPath)}.pre-comanda-cancelada-${Date.now()}.bak`;
+  await db.backup(backup);
+  db.pragma('foreign_keys = OFF');
+  try{
+    db.transaction(()=>{
+      db.exec('DROP TABLE IF EXISTS Comanda_nueva');
+      db.exec(comandaTableSql);
+      db.exec(`INSERT INTO Comanda_nueva(id_comanda,id_mesa,id_usuario,fecha_hora,estado)
+        SELECT id_comanda,id_mesa,id_usuario,fecha_hora,estado FROM Comanda ORDER BY id_comanda`);
+      db.exec('DROP TABLE Comanda');
+      db.exec('ALTER TABLE Comanda_nueva RENAME TO Comanda');
+    })();
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_Comanda_mesa_en_proceso ON Comanda(id_mesa) WHERE estado='En_Proceso'");
+    db.exec('CREATE INDEX IF NOT EXISTS ix_Comanda_fecha_hora ON Comanda(fecha_hora)');
+    const violations=db.pragma('foreign_key_check');
+    if(violations.length)throw new Error(`La migración produjo ${violations.length} violaciones de claves foráneas`);
+    return {migrated:true,backup};
+  }catch(error){
+    throw new Error(`No se pudo migrar Comanda; la copia previa está en ${backup}. ${error.message}`,{cause:error});
+  }finally{
+    db.pragma('foreign_keys = ON');
+  }
+}
+
 /**
  * Upgrade the former four-state item lifecycle to the official three-state model.
  * Creates a SQLite backup before rebuilding the table and is safe to re-run.

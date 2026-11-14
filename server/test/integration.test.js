@@ -91,9 +91,6 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.ok(rows[0].fecha_hora_envio,'fecha_hora_envio debe persistirse por ítem');
   assert.deepEqual(rows.map(row=>row.estado_elaboracion),['En_Preparacion','En_Preparacion'],'cada plato inicia directamente En_Preparacion');
   assert.equal(db.prepare('SELECT cantidad_comensales FROM Datos_Operacion_Comanda WHERE id_comanda=?').get(sent.data.orderId).cantidad_comensales,3,'la cantidad confirmada al abrir se conserva en la Comanda');
-  const blockedRelease=await request(`/tables/${table.id}/release`,mozo,'POST',{});
-  assert.equal(blockedRelease.status,400,'no se libera una mesa si ya tiene platos activos');
-
   const first=rows[0],second=rows[1];
   const removedState=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'queued'});
   assert.equal(removedState.status,400,'queued solo pertenece a la cola offline, no al estado de elaboración');
@@ -103,6 +100,9 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   assert.equal(kitchenMutation.status,403,'la pantalla de Cocina permanece de solo lectura');
   const waiterDeliver=await request(`/order-items/${first.id_detalle}/status`,mozo,'PATCH',{status:'delivered'});
   assert.equal(waiterDeliver.status,200,waiterDeliver.data.error);
+  const blockedRelease=await request(`/tables/${table.id}/release`,mozo,'POST',{});
+  assert.equal(blockedRelease.status,400,'una Comanda con al menos un plato Entregado no se puede cancelar ni liberar');
+  assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=?').get(table.id).estado,'Ocupada','la mesa continúa ocupada si ya hubo una entrega');
   const managerEarly=await request(`/order-items/${second.id_detalle}/status`,jefe,'PATCH',{status:'delivered'});
   assert.equal(managerEarly.status,403,'Jefe no debe intervenir antes de 25 minutos');
   db.prepare('UPDATE Detalle_Comanda SET fecha_hora_envio=? WHERE id_detalle=?').run(new Date(Date.now()-26*60_000).toISOString(),second.id_detalle);
@@ -227,6 +227,20 @@ test('PI: permisos, comanda idempotente, ciclo de ítem, lista FIFO y caja trans
   const detail=db.prepare('SELECT id_detalle FROM Detalle_Comanda WHERE id_comanda=?').get(sent2.data.orderId);
   const cancelled=await request(`/cashier/orders/${sent2.data.orderId}/items/${detail.id_detalle}/cancel`,caja,'POST',{});assert.equal(cancelled.status,200,cancelled.data.error);
   const zero=await request('/payments/close',caja,'POST',{orderId:sent2.data.orderId,payments:[{method:'cash',amountCents:0}]});assert.equal(zero.status,200,zero.data.error);
+
+  const fullCancelTable=(await request('/tables',mozo)).data.find(item=>item.status==='free');
+  assert.ok(fullCancelTable,'se requiere una mesa libre para probar la cancelación integral');
+  const openedForCancel=await request('/tables/open',mozo,'POST',{tableId:fullCancelTable.id,partySize:2});assert.equal(openedForCancel.status,201);
+  const sentForCancel=await request('/orders',mozo,'POST',{tableId:fullCancelTable.id,partySize:2,items:[{menuItemId:1,quantity:1,notes:''},{menuItemId:2,quantity:1,notes:''}]},{'Idempotency-Key':`full-cancel-${Date.now()}`});assert.equal(sentForCancel.status,201,sentForCancel.data.error);
+  const fullCancelOrder=sentForCancel.data.orderId;
+  const fullCancelDetails=db.prepare('SELECT id_detalle,estado_elaboracion FROM Detalle_Comanda WHERE id_comanda=? ORDER BY id_detalle').all(fullCancelOrder);
+  assert.deepEqual(fullCancelDetails.map(item=>item.estado_elaboracion),['En_Preparacion','En_Preparacion']);
+  const fullCancel=await request(`/tables/${fullCancelTable.id}/release`,mozo,'POST',{});
+  assert.equal(fullCancel.status,200,fullCancel.data.error);
+  assert.equal(db.prepare('SELECT estado FROM Comanda WHERE id_comanda=?').get(fullCancelOrder).estado,'Cancelada','la Comanda completa queda cancelada');
+  assert.deepEqual(db.prepare('SELECT estado_elaboracion FROM Detalle_Comanda WHERE id_comanda=? ORDER BY id_detalle').all(fullCancelOrder).map(item=>item.estado_elaboracion),['Cancelado','Cancelado'],'todos los ítems en preparación pasan a Cancelado');
+  assert.equal(db.prepare('SELECT estado FROM Mesa WHERE id_mesa=?').get(fullCancelTable.id).estado,'Libre','la mesa se libera al cancelar la Comanda');
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM Datos_Ocupacion_Mesa WHERE id_mesa=?').get(fullCancelTable.id).n,0,'se elimina la ocupación al cancelar la Comanda');
   db.close();
 });
 

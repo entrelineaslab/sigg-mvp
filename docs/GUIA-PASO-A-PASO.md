@@ -80,7 +80,7 @@ Elegir el perfil y PIN `1234` en el entorno de demostración. Cambiar el PIN ant
 3. Para cargar un pedido, pulsa “Iniciar comanda” en la mesa ocupada. Selecciona una sección de carta, agrega los productos, ajusta cantidades y escribe observaciones completas (incluidas alergias o instrucciones).
 4. Pulsa “Enviar a cocina (KDS)”. Ese primer envío crea la Comanda y cada línea se guarda en `Detalle_Comanda` con `precio_unitario_historico`, `observaciones`, `fecha_hora_envio` y `estado_elaboracion='En_Preparacion'`.
 5. La clave `Idempotency-Key` evita duplicar un pedido si el cliente reintenta. Ante una caída de red, el navegador conserva el envío en almacenamiento local y lo reintenta al reconectar. En mesas con Comanda activa, “Ver comanda” abre la cuenta existente; los nuevos ítems se agregan allí. Despacho permanece separado.
-6. “Liberar mesa” solo está disponible si no quedan platos activos; el servidor también valida esta regla. Si ya hay platos en preparación o entregados, no se libera desde Salón: la cuenta debe resolverse en Caja.
+6. Si el grupo se retira después de pedir pero antes de que se entregue cualquier plato, pulsa “Cancelar comanda y liberar mesa” y confirma. La operación cancela la Comanda completa, pasa los ítems `En_Preparacion` a `Cancelado` y libera la mesa en una transacción. Si algún plato ya está `Entregado`, el servidor bloquea la cancelación completa y la cuenta debe resolverse en Caja.
 
 ## 6. Cocina y entrega a la mesa
 
